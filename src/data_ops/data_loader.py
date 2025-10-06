@@ -1,3 +1,22 @@
+"""
+data_loader.py
+
+Simple data loader for the flexible consumer scheduling problem.
+
+This module reads JSON configuration files and returns structured Python objects
+(dictionaries and dataclasses) that downstream modules can use.
+
+Expected files in a data folder (example: question_1a/):
+- appliance_params.json
+- bus_params.json
+- consumer_params.json
+- DER_production.json
+- usage_preference.json
+
+The DataLoader class provides methods to load and access this data.
+
+"""
+#%%
 # -----------------------------
 # Load Data
 # -----------------------------
@@ -12,7 +31,9 @@ from logging import Logger
 import pandas as pd
 import xarray as xr
 import numpy as np
+import os
 import yaml
+from typing import Dict, Any
 
 
 class DataLoader:
@@ -20,57 +41,58 @@ class DataLoader:
     Loads energy system input data for a given configuration/question from structured CSV and json files
     and an auxiliary configuration metadata file.
     
-    Example usage:
-    open interactive window in VSCode,
-    >>> cd ../../
-    run the script data_loader.py in the interactive window,
-    >>> data = DataLoader(input_path='..')
     """
     question: str
     input_path: Path
 
-    def __init__(self):
+    def __init__(self, input_path: str = '/Users/lalka/Projects/46750-template-assignment-1/data/question_1a'):
         """
-        Post-initialization to load and validate all required datasets (placeholder function)
+        Initializes the DataLoader with the base directory containing the JSON input files.
+        :param base_path: Folder path where question 1a JSON data files are located.
+        """
 
-        example usage:
-        self.input_path = Path(self.input_path).resolve()
+        self.input_path = Path(input_path).resolve()
         
-        # Load metadata (auxiliary scenario data)
-        self.load_aux_data('question1a_scenario1_aux_data.yaml')
-        
-        # Load CSV and json datasets
-        self.data()
-        """
-        pass
+        # Attributes to store loaded data
+        self.appliance_params = {}
+        self.bus_params = {}
+        self.consumer_params = {}
+        self.der_production = {}
+        self.usage_preference = {}
 
-    def _load_dataset(self, question_name: str):
-        """Helper function to load all CSV or json files, using the appropriate method based on file extension.
-        
-        example usage: 
-        call the load_dataset() function from utils.py to load all files in the input_path directory
-        save all data as class attributes (e.g. self.demand, self.wind, etc.), structured as pandas DataFrames or Series (or other format as prefered)
-        """
-        pass
+    def _load_json(self, filename: str) -> Any:
+        """Helper method to load a JSON file from the base path."""
+        path = os.path.join(self.input_path, filename)
+        with open(path, 'r') as f:
+            return json.load(f)
 
 
-    def _load_data_file(self, question_name: str, file_name: str):
-        """
-        Placeholder function 
-        Helper function to load a specific CSV or json file, using the appropriate method based on file extension.. Raises FileNotFoundError if missing.
-        
-        example usage: 
-        define and call a load_data_file() function from utils.py to load a specific file in the input_path directory
-        save all data as class attributes (e.g. self.demand, self.wind, etc.), structured as pandas DataFrames or Series (or other format as prefered)"""
-        pass
+    def load_all(self):
+        """Loads all required JSON files into respective attributes."""
+        self.appliance_params = self._load_json('appliance_params.json')
+        self.bus_params = self._load_json('bus_params.json')
+        self.consumer_params = self._load_json('consumer_params.json')
+        self.der_production = self._load_json('DER_production.json')
+        self.usage_preference = self._load_json('usage_preference.json')
 
-    def load_aux_data(self, question_name: str, filename: str):
+
+    def get_data(self) -> Dict[str, Any]:
         """
-        Placeholder Helper function to Load auxiliary metadata for the scenario/question from a YAML/json file or other formats
-        
-        Example application: 
-        define and call a load_aux_data() function from utils.py to load a specific auxiliary file in the input_path directory
-        Save the content as s class attributes, in a dictionary, pd datframe or other: self.aux_data
-        Attach key values as class attributes (flattened).
+        Returns a dictionary of all loaded data.
+        :return: Dictionary with keys 'der', 'bus', 'consumer', 'der_production', 'usage_preference'.
         """
-        pass
+        return {
+            'appliance': self.appliance_params,
+            'bus': self.bus_params,
+            'consumer': self.consumer_params,
+            'der_production': self.der_production,
+            'usage_preference': self.usage_preference
+        }
+    
+#%%
+if __name__ == '__main__':
+    dl = DataLoader()
+    dl.load_all()
+    data = dl.get_data()
+    print(data)  
+# %%
