@@ -29,17 +29,16 @@ from pathlib import Path
 from dataclasses import dataclass
 from logging import Logger
 import pandas as pd
-import xarray as xr
-import numpy as np
+from dataclasses import dataclass
 import os
-import yaml
 from typing import Dict, Any
-
 
 class DataLoader:
     """
     Loads energy system input data for a given configuration/question from structured CSV and json files
     and an auxiliary configuration metadata file.
+
+    >>> data = DataLoader(input_path='data/question_1a')
     
     """
     question: str
@@ -52,13 +51,15 @@ class DataLoader:
         """
 
         self.input_path = Path(input_path).resolve()
-        
-        # Attributes to store loaded data
-        self.appliance_params = {}
-        self.bus_params = {}
-        self.consumer_params = {}
-        self.der_production = {}
-        self.usage_preference = {}
+        self.appliance_params: Dict[str, Any] = {}
+        self.bus_params: Dict[str, Any] = {}
+        self.consumer_params: Dict[str, Any] = {}
+        self.der_production: Dict[str, Any] = {}
+        self.usage_preference: Dict[str, Any] = {}
+
+        # load immediately
+        self.load_all()
+        self._populate_data()
 
     def _load_json(self, filename: str) -> Any:
         """Helper method to load a JSON file from the base path."""
@@ -73,26 +74,31 @@ class DataLoader:
         self.bus_params = self._load_json('bus_params.json')
         self.consumer_params = self._load_json('consumer_params.json')
         self.der_production = self._load_json('DER_production.json')
-        self.usage_preference = self._load_json('usage_preference.json')
+        self.usage_preference = self._load_json('usage_preferences.json')
 
 
-    def get_data(self) -> Dict[str, Any]:
+    def _populate_data(self) -> Dict[str, Any]:
         """
         Returns a dictionary of all loaded data.
         :return: Dictionary with keys 'der', 'bus', 'consumer', 'der_production', 'usage_preference'.
         """
-        return {
-            'appliance': self.appliance_params,
-            'bus': self.bus_params,
-            'consumer': self.consumer_params,
-            'der_production': self.der_production,
-            'usage_preference': self.usage_preference
+        self.data = {
+            "appliance": self.appliance_params,
+            "bus": self.bus_params,
+            "consumer": self.consumer_params,
+            "der_production": self.der_production,
+            "usage_preference": self.usage_preference,
         }
+        
+    def get_data(self) -> Dict[str, Any]:
+        """Return the combined dictionary (already populated during __init__)."""
+        return self.data
+
     
 #%%
-if __name__ == '__main__':
-    dl = DataLoader()
-    dl.load_all()
-    data = dl.get_data()
-    print(data)  
+# if __name__ == '__main__':
+#     data = DataLoader(input_path='/Users/lalka/Projects/46750-template-assignment-1/data/question_1a')
+    # dl.load_all()
+    # data = dl.get_data()
+    # print(data)  
 # %%
