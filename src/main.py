@@ -12,6 +12,8 @@ Suggested structure:
 from data_ops import DataLoader, DataProcessor
 from opt_model import OptModel
 
+
+############## Question 1a: Single simulation ##############
 # 1. Load and process data
 loader = DataLoader(input_path='/Users/rofrug/Library/CloudStorage/OneDrive-DanmarksTekniskeUniversitet/First Year PhD/46750 Optimization in modern power systems/46750-template-assignment-1/data/question_1a')
 raw = loader.get_data()
@@ -32,3 +34,4 @@ if solution:
 else:
     print("No feasible solution found.")
 # %%
+###########

@@ -27,16 +27,42 @@ class ModelData:
     hours: index [0..T-1] or a pandas Index of 24 hours if provided upstream.
     notes: free-form notes about assumptions made.
     """
-    s_t: np.ndarray
-    p_buy_t: np.ndarray
-    p_sell_t: np.ndarray
-    tau_import_t: np.ndarray
-    tau_export_t: np.ndarray
-    d_min_total: float
-    d_max_t: np.ndarray
-    x_max_t: np.ndarray
-    y_max_t: np.ndarray
+    # Core energy flows
+    s_t: np.ndarray                    # PV available energy (kWh)
+    p_buy_t: np.ndarray               # grid purchase price (DKK/kWh)
+    p_sell_t: np.ndarray              # grid sale price (DKK/kWh)
+    tau_import_t: np.ndarray          # grid import tariff (DKK/kWh)
+    tau_export_t: np.ndarray          # grid export tariff (DKK/kWh)
+    
+    # Penalties for excess import/export beyond limits
+    penalty_excess_import: float       # DKK/kWh for importing above x_max_t
+    penalty_excess_export: float       # DKK/kWh for exporting above y_max_t
+    
+    # Load requirements and bounds
+    d_min_total: float                # minimum total daily consumption (kWh)
+    d_max_t: np.ndarray              # per-hour maximum flexible consumption (kWh)
+    d_min_ratio: float               # minimum power ratio for flexible load
+    
+    # Grid limits (regular operation, penalties apply beyond these)
+    x_max_t: np.ndarray              # per-hour max import without penalty (kWh)
+    y_max_t: np.ndarray              # per-hour max export without penalty (kWh)
+    
+    # Ramp rate constraints for flexible load
+    ramp_up_max_ratio: float         # max ramp up per hour as ratio of max_load
+    ramp_down_max_ratio: float       # max ramp down per hour as ratio of max_load
+    
+    # On/off time constraints (for loads that have minimum runtime)
+    min_on_time_h: int               # minimum consecutive hours load must stay on
+    min_off_time_h: int              # minimum consecutive hours load must stay off
+    
+    # Time indexing
     hours: pd.Index
+    
+    # Storage and heat pump (for future extension)
+    storage_params: Optional[Dict[str, Any]]    # battery parameters if available
+    heat_pump_params: Optional[Dict[str, Any]]  # heat pump parameters if available
+    
+    # Metadata
     notes: Dict[str, Any]
 
 
@@ -102,8 +128,8 @@ class DataProcessor:
             raise ValueError("PV nameplate max_power_kW must be > 0.")
         return nameplate, pv.get("DER_id", "PV")
 
-    def _extract_flexible_load_specs(self) -> Tuple[float, str]:
-        """Return (max_load_kWh_per_hour, load_id)."""
+    def _extract_flexible_load_specs(self) -> Tuple[float, str, Dict[str, Any]]:
+        """Return (max_load_kWh_per_hour, load_id, load_constraints)."""
         app = self.raw.get("appliance", {})
         loads = app.get("load", []) or []
         if not loads:
@@ -116,10 +142,21 @@ class DataProcessor:
                 break
         if ffl is None:
             raise ValueError("No 'fully flexible load' found in appliance.load.")
+        
         max_per_h = float(ffl.get("max_load_kWh_per_hour", 0.0))
         if max_per_h <= 0:
             raise ValueError("max_load_kWh_per_hour must be > 0 for flexible load.")
-        return max_per_h, ffl.get("load_id", "FFL")
+        
+        # Extract additional load constraints
+        constraints = {
+            "min_power_ratio": float(ffl.get("min_load_ratio", 0.0)),
+            "ramp_up_ratio": float(ffl.get("max_ramp_rate_up_ratio", 1.0)),
+            "ramp_down_ratio": float(ffl.get("max_ramp_rate_down_ratio", 1.0)),
+            "min_on_time_h": int(ffl.get("min_on_time_h", 0)),
+            "min_off_time_h": int(ffl.get("min_off_time_h", 0)),
+        }
+        
+        return max_per_h, ffl.get("load_id", "FFL"), constraints
 
     def _extract_pv_profile(self) -> List[float]:
         prod = self.raw.get("der_production", [])
@@ -154,18 +191,11 @@ class DataProcessor:
         return float(v)
 
     def _extract_prices_and_tariffs(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, pd.Index]:
-        """
-        Returns (p_buy_t, p_sell_t, tau_import_t, tau_export_t, hours_index)
-
-        - p_buy_t from bus['energy_price_DKK_per_kWh'] (buy).
-        - p_sell_t: if not provided, can set equal or with discount.
-        - tau_import_t and tau_export_t: distinct tariff arrays.
-        """
+        """Returns (p_buy_t, p_sell_t, tau_import_t, tau_export_t, hours_index)"""
         bus = self._extract_single_bus()
 
         prices = bus.get("energy_price_DKK_per_kWh")
         p_buy = np.asarray([float(x) for x in prices], dtype=float)
-
         p_sell = p_buy.copy()  # or adapt for real case
 
         tau_import = float(bus.get("import_tariff_DKK/kWh", 0.0))
@@ -176,6 +206,13 @@ class DataProcessor:
         hours = pd.RangeIndex(start=0, stop=len(p_buy), step=1, name="hour")
         return p_buy, p_sell, tau_import_t, tau_export_t, hours
 
+    def _extract_penalty_costs(self) -> Tuple[float, float]:
+        """Extract penalty costs for excess import/export."""
+        bus = self._extract_single_bus()
+        penalty_import = float(bus.get("penalty_excess_import_DKK/kWh", 0.0))
+        penalty_export = float(bus.get("penalty_excess_export_DKK/kWh", 0.0))
+        return penalty_import, penalty_export
+
     def _bounds_from_bus(self, T: int) -> Tuple[np.ndarray, np.ndarray]:
         bus = self._extract_single_bus()
         x_max = float(bus.get("max_import_kW", 0.0))
@@ -185,10 +222,15 @@ class DataProcessor:
         # 1-hour resolution: kW -> kWh per step = same numeric value.
         return np.full(T, x_max, dtype=float), np.full(T, y_max, dtype=float)
 
+    def _extract_storage_heat_pump(self) -> Tuple[Optional[Dict], Optional[Dict]]:
+        """Extract storage and heat pump parameters if available."""
+        app = self.raw.get("appliance", {})
+        storage = app.get("storage")
+        heat_pump = app.get("heat_pump")
+        return storage, heat_pump
+
     def build_model_data(self) -> ModelData:
-        """
-        Main entry point: returns ModelData with arrays/scalars for the LP.
-        """
+        """Main entry point: returns enhanced ModelData with penalties and constraints."""
         # time and prices
         p_buy_t, p_sell_t, tau_import_t, tau_export_t, hours = self._extract_prices_and_tariffs()
         T = len(hours)
@@ -198,22 +240,25 @@ class DataProcessor:
         profile = self._extract_pv_profile()
         if len(profile) != T:
             raise ValueError(f"PV profile length {len(profile)} != T={T}.")
-        # Convert to kWh per hour step: nameplate (kW) * ratio (0..1) * 1h
         s_t = pv_nameplate_kW * np.asarray(profile, dtype=float)
 
-        # Flexible load bounds
-        d_max_per_h, load_id = self._extract_flexible_load_specs()
+        # Flexible load bounds and constraints
+        d_max_per_h, load_id, load_constraints = self._extract_flexible_load_specs()
         d_max_t = np.full(T, d_max_per_h, dtype=float)
 
-        # Grid bounds
+        # Grid bounds and penalty costs
         x_max_t, y_max_t = self._bounds_from_bus(T)
+        penalty_import, penalty_export = self._extract_penalty_costs()
 
         # Daily minimum energy
         d_min_total = self._extract_min_daily_energy(load_id)
 
-        # Optional simple checks
+        # Storage and heat pump (for future use)
+        storage_params, heat_pump_params = self._extract_storage_heat_pump()
+
+        # Validation
         if np.any(p_buy_t < 0) or np.any(p_sell_t < 0) or np.any(tau_import_t < 0) or np.any(tau_export_t < 0):
-            raise ValueError("Negative prices/tariffs are not supported by this simple processor.")
+            raise ValueError("Negative prices/tariffs are not supported.")
         if d_min_total < 0:
             raise ValueError("Minimum daily energy must be >= 0.")
 
@@ -221,9 +266,10 @@ class DataProcessor:
             "pv_id": pv_id,
             "load_id": load_id,
             "assumptions": {
-                "symmetric_tariff": True,
+                "symmetric_tariff": False,
                 "sell_price_equals_buy_price": True,
                 "hour_resolution_h": 1.0,
+                "penalty_excess_enabled": True,
             },
         }
 
@@ -233,27 +279,19 @@ class DataProcessor:
             p_sell_t=p_sell_t,
             tau_import_t=tau_import_t,
             tau_export_t=tau_export_t,
+            penalty_excess_import=penalty_import,
+            penalty_excess_export=penalty_export,
             d_min_total=float(d_min_total),
             d_max_t=d_max_t,
+            d_min_ratio=load_constraints["min_power_ratio"],
             x_max_t=x_max_t,
             y_max_t=y_max_t,
+            ramp_up_max_ratio=load_constraints["ramp_up_ratio"],
+            ramp_down_max_ratio=load_constraints["ramp_down_ratio"],
+            min_on_time_h=load_constraints["min_on_time_h"],
+            min_off_time_h=load_constraints["min_off_time_h"],
             hours=hours,
+            storage_params=storage_params,
+            heat_pump_params=heat_pump_params,
             notes=notes,
         )
-
-    # Convenience: return as dict for solvers that like dict inputs
-    def as_dict(self) -> Dict[str, Any]:
-        md = self.build_model_data()
-        return {
-            "s_t": md.s_t,
-            "p_buy_t": md.p_buy_t,
-            "p_sell_t": md.p_sell_t,
-            "tau__import_t": md.tau__import_t,
-            "tau__export_t": md.tau__export_t,
-            "d_min_total": md.d_min_total,
-            "d_max_t": md.d_max_t,
-            "x_max_t": md.x_max_t,
-            "y_max_t": md.y_max_t,
-            "hours": md.hours,
-            "notes": md.notes,
-        }
