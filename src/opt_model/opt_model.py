@@ -7,7 +7,7 @@ class OptModel:
     - Single flexible load, curtailable PV, daily energy target, tariffs, prices.
     """
 
-    def __init__(self, model_data):
+    def __init__(self, model_data, question_name: str):
         """
         Initialize and set up the optimization model.
         Args:
@@ -40,9 +40,14 @@ class OptModel:
         # Power balance: load met by *used* PV + net grid import
         for t in range(self.T):
             self.m.addConstr(self.d[t] == self.s_pv[t] + self.x[t] - self.y[t], name=f"balance_{t}")
-
-        # Daily minimum energy consumption
-        self.m.addConstr(gp.quicksum(self.d[t] for t in range(self.T)) >= model_data.d_min_total, "min_total_load")
+        
+        if question_name in ['1b', '1c']:
+            for t in range(self.T):
+                # Hourly minimum energy consumption
+                self.m.addConstr(self.d[t] >= model_data.d_min_t[t], f"min_load_{t}")
+        elif question_name == '1a':
+            # Daily minimum energy consumption
+            self.m.addConstr(gp.quicksum(self.d[t] for t in range(self.T)) >= model_data.d_min_total, "min_total_load")
 
         # --- Objective: minimize total daily net cost ---
 

@@ -33,6 +33,7 @@ from dataclasses import dataclass
 import os
 from typing import Dict, Any
 
+
 class DataLoader:
     """
     Loads energy system input data for a given configuration/question from structured CSV and json files
@@ -44,13 +45,14 @@ class DataLoader:
     question: str
     input_path: Path
 
-    def __init__(self, input_path: str = '/Users/lalka/Projects/46750-template-assignment-1/data/question_1a'):
+    def __init__(self, question_name: str):
         """
         Initializes the DataLoader with the base directory containing the JSON input files.
         :param base_path: Folder path where question 1a JSON data files are located.
         """
-
-        self.input_path = Path(input_path).resolve()
+        self.input_path: str
+        self.input_path =  str(Path('../46750-template-assignment-1/data/question_'+question_name).resolve())
+        #self.input_path = Path('../data/'+question_name).resolve()
         self.appliance_params: Dict[str, Any] = {}
         self.bus_params: Dict[str, Any] = {}
         self.consumer_params: Dict[str, Any] = {}
@@ -60,6 +62,7 @@ class DataLoader:
         # load immediately
         self.load_all()
         self._populate_data()
+
 
     def _load_json(self, filename: str) -> Any:
         """Helper method to load a JSON file from the base path."""
@@ -94,11 +97,14 @@ class DataLoader:
         """Return the combined dictionary (already populated during __init__)."""
         return self.data
 
-    
-#%%
-# if __name__ == '__main__':
-#     data = DataLoader(input_path='/Users/lalka/Projects/46750-template-assignment-1/data/question_1a')
-    # dl.load_all()
-    # data = dl.get_data()
-    # print(data)  
 # %%
+if __name__ == "__main__":
+    from pathlib import Path
+    question_name = 'question_1a'
+    print('PATH UNDERNEATH')
+    print(Path.joinpath(Path('../46750-template-assignment-1/data'), question_name).resolve())
+    print('PATH ABOVE')
+    # Example usage
+    data_loader = DataLoader('1a')
+    data = data_loader.get_data()
+    print(data) # Print loaded data for verification    

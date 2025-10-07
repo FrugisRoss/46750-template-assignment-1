@@ -12,14 +12,20 @@ Suggested structure:
 from data_ops import DataLoader, DataProcessor
 from opt_model import OptModel
 
+
+
 # 1. Load and process data
-loader = DataLoader()
+question_name = '1a' # Input 1a, 1b, or 1c to choose relevant data set
+
+loader = DataLoader(question_name)
 raw = loader.get_data()
+print(raw) # Print loaded data for verification
+
 processor = DataProcessor(raw)
 model_data = processor.build_model_data()
 
 # 2. Build and solve optimization model
-optm = OptModel(model_data)
+optm = OptModel(model_data, question_name)
 solution = optm.solve()
 
 # %%
