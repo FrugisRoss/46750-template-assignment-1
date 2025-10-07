@@ -1,7 +1,7 @@
 [{
   "bus_ID": "Bus1",
-  "import_tariff_DKK/kWh": 5,
-  "export_tariff_DKK/kWh": 4,
+  "import_tariff_DKK/kWh": 0.5,
+  "export_tariff_DKK/kWh": 0.4,
   "max_import_kW": 1000,
   "max_export_kW": 500,
   "penalty_excess_import_DKK/kWh": 10,
