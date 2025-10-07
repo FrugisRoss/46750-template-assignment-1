@@ -65,6 +65,14 @@ class ModelData:
     # Metadata
     notes: Dict[str, Any]
 
+@dataclass
+class ModelData1b(ModelData):
+    """
+    Extension of ModelData for 1b with additional attributes.
+    Inherits all fields from ModelData and adds new ones below.
+    """
+    p_pen: np.ndarray                    # penalty price for deviation from the reference given load (DKK/kWh)
+    d_given_t: np.ndarray                # given hourly load profile (kWh)
 
 class DataProcessor:
     """
@@ -294,4 +302,119 @@ class DataProcessor:
             storage_params=storage_params,
             heat_pump_params=heat_pump_params,
             notes=notes,
+        )
+
+class DataProcessor1b(DataProcessor):
+    """
+    Extension of DataProcessor for 1b, extracting d_given_t and p_pen for ModelData1b.
+    """
+
+    def _extract_given_load_profile(self, load_id: str, T: int, d_max_per_h: float) -> np.ndarray:
+        """
+        Extract the given hourly load profile (d_given_t) for the specified load_id.
+        Returns a numpy array of length T (typically 24).
+        If not found, raises ValueError.
+        """
+        prefs = self._extract_usage_pref()
+        lp = prefs.get("load_preferences", []) or []
+        entry = None
+        for p in lp:
+            if p.get("load_id") == load_id:
+                entry = p
+                break
+        if entry is None:
+            raise ValueError(f"No usage preference found for load_id={load_id}.")
+        profile = entry.get("hourly_profile_ratio", None)
+        if profile is None or len(profile) != T:
+            raise ValueError(f"hourly_profile_ratio missing or wrong length for load_id={load_id}.")
+        # Convert ratio to kWh using d_max_per_h
+        return d_max_per_h * np.asarray(profile, dtype=float)
+
+    def _extract_penalty_profile(self, load_id: str, T: int) -> np.ndarray:
+        """
+        Extract the penalty price (p_pen) for deviation from d_given_t.
+        The penalty is a scalar value (not a profile) and is found under
+        "penalty_load_shifting" in the same entry as the given load profile.
+        Returns a numpy array of length T filled with this value.
+        """
+        prefs = self._extract_usage_pref()
+        lp = prefs.get("load_preferences", []) or []
+        entry = None
+        for p in lp:
+            if p.get("load_id") == load_id:
+                entry = p
+                break
+        if entry is not None and "penalty_load_shifting" in entry and entry["penalty_load_shifting"] is not None:
+            pen = float(entry["penalty_load_shifting"])
+            return np.full(T, pen, dtype=float)
+        else:
+            return np.zeros(T, dtype=float)
+
+    def build_model_data(self) -> ModelData1b:
+        """
+        Returns ModelData1b with d_given_t and p_pen extracted.
+        """
+        # time and prices
+        p_buy_t, p_sell_t, tau_import_t, tau_export_t, hours = self._extract_prices_and_tariffs()
+        T = len(hours)
+
+        # PV availability s_t
+        pv_nameplate_kW, pv_id = self._extract_pv_specs()
+        profile = self._extract_pv_profile()
+        if len(profile) != T:
+            raise ValueError(f"PV profile length {len(profile)} != T={T}.")
+        s_t = pv_nameplate_kW * np.asarray(profile, dtype=float)
+
+        # Flexible load bounds and constraints
+        d_max_per_h, load_id, load_constraints = self._extract_flexible_load_specs()
+        d_max_t = np.full(T, d_max_per_h, dtype=float)
+
+        # Grid bounds and penalty costs
+        x_max_t, y_max_t = self._bounds_from_bus(T)
+        penalty_import, penalty_export = self._extract_penalty_costs()
+
+        # Daily minimum energy
+        d_min_total = self._extract_min_daily_energy(load_id)
+
+        # Storage and heat pump (for future use)
+        storage_params, heat_pump_params = self._extract_storage_heat_pump()
+
+        # d_given_t and p_pen
+        d_given_t = self._extract_given_load_profile(load_id, T, d_max_per_h)
+        p_pen = self._extract_penalty_profile(load_id, T)
+
+        notes = {
+            "pv_id": pv_id,
+            "load_id": load_id,
+            "assumptions": {
+                "symmetric_tariff": False,
+                "sell_price_equals_buy_price": True,
+                "hour_resolution_h": 1.0,
+                "penalty_excess_enabled": True,
+            },
+        }
+
+        return ModelData1b(
+            s_t=s_t,
+            p_buy_t=p_buy_t,
+            p_sell_t=p_sell_t,
+            tau_import_t=tau_import_t,
+            tau_export_t=tau_export_t,
+            penalty_excess_import=penalty_import,
+            penalty_excess_export=penalty_export,
+            d_min_total=float(d_min_total),
+            d_max_t=d_max_t,
+            d_min_ratio=load_constraints["min_power_ratio"],
+            x_max_t=x_max_t,
+            y_max_t=y_max_t,
+            ramp_up_max_ratio=load_constraints["ramp_up_ratio"],
+            ramp_down_max_ratio=load_constraints["ramp_down_ratio"],
+            min_on_time_h=load_constraints["min_on_time_h"],
+            min_off_time_h=load_constraints["min_off_time_h"],
+            hours=hours,
+            storage_params=storage_params,
+            heat_pump_params=heat_pump_params,
+            notes=notes,
+            p_pen=p_pen,
+            d_given_t=d_given_t,
         )

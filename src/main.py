@@ -10,15 +10,18 @@ Suggested structure:
 """
 #%%
 from data_ops import DataLoader, DataProcessor
+from data_ops.data_processor import DataProcessor1b
 from opt_model import OptModel
 
-
+# %%
 ############## Question 1a: Single simulation ##############
 # 1. Load and process data
 loader = DataLoader(input_path='/Users/rofrug/Library/CloudStorage/OneDrive-DanmarksTekniskeUniversitet/First Year PhD/46750 Optimization in modern power systems/46750-template-assignment-1/data/question_1a')
 raw = loader.get_data()
+print(raw)
 processor = DataProcessor(raw)
 model_data = processor.build_model_data()
+print(model_data)
 
 # 2. Build and solve optimization model
 optm = OptModel(model_data)
@@ -34,4 +37,13 @@ if solution:
 else:
     print("No feasible solution found.")
 # %%
-###########
+############## Question 1b ##############
+
+# 1. Load and process data
+loader = DataLoader(input_path='/Users/rofrug/Library/CloudStorage/OneDrive-DanmarksTekniskeUniversitet/First Year PhD/46750 Optimization in modern power systems/46750-template-assignment-1/data/question_1a')
+raw = loader.get_data()
+print(raw)
+processor = DataProcessor1b(raw)
+model_data = processor.build_model_data()
+print(model_data)
+# %%
