@@ -24,22 +24,25 @@ class OptModel:
         # --- Variables ---
 
         # d_t = scheduled flexible load consumption each hour [kWh]
-        self.d = self.m.addVars(self.T, lb=0, ub=model_data.d_max_t, name="d")
+        self.d = self.m.addVMar(self.T, lb=0, ub=model_data.d_max_t, name="d")
 
         # x_t = electricity *imported* from grid each hour [kWh]
-        self.x = self.m.addVars(self.T, lb=0, ub=model_data.x_max_t, name="x")
+        self.x = self.m.addMVar(self.T, lb=0, ub=model_data.x_max_t, name="x")
 
         # y_t = electricity *exported* to grid each hour [kWh]
-        self.y = self.m.addVars(self.T, lb=0, ub=model_data.y_max_t, name="y")
+        self.y = self.m.addMVar(self.T, lb=0, ub=model_data.y_max_t, name="y")
 
         # s_pv_t = PV energy *actually used* in each hour [kWh]
-        self.s_pv = self.m.addVars(self.T, lb=0, ub=model_data.s_t, name="s_pv")  # ≤ available PV each hour
+        self.s_pv = self.m.addMVar(self.T, lb=0, ub=model_data.s_t, name="s_pv")  # ≤ available PV each hour
 
         # --- Constraints ---
 
-        # Power balance: load met by *used* PV + net grid import
-        for t in range(self.T):
-            self.m.addConstr(self.d[t] == self.s_pv[t] + self.x[t] - self.y[t], name=f"balance_{t}")
+        # # Power balance: load met by *used* PV + net grid import
+        # for t in range(self.T):
+        #     self.m.addConstr(self.d[t] == self.s_pv[t] + self.x[t] - self.y[t], name=f"balance_{t}")
+
+        self.m.addConstr(self.d == self.s_pv + self.x - self.y, name=f"power_balance")
+
 
         # Daily minimum energy consumption
         self.m.addConstr(gp.quicksum(self.d[t] for t in range(self.T)) >= model_data.d_min_total, "min_total_load")
