@@ -8,69 +8,104 @@ class OptModel:
     """
 
     def __init__(self, model_data):
-        """
-        Initialize and set up the optimization model.
-        Args:
-            model_data (ModelData): Output from DataProcessor with scenario data.
-        """
+        """Initialize and set up the enhanced optimization model."""
         self.T = len(model_data.hours)
-
-        # Store model data for access
         self.data = model_data
-
-        # Start Gurobi model
-        self.m = gp.Model("flexible_consumer")
+        self.m = gp.Model("flexible_consumer_enhanced")
 
         # --- Variables ---
-
-        # d_t = scheduled flexible load consumption each hour [kWh]
-        self.d = self.m.addVMar(self.T, lb=0, ub=model_data.d_max_t, name="d")
-
-        # x_t = electricity *imported* from grid each hour [kWh]
-        self.x = self.m.addMVar(self.T, lb=0, ub=model_data.x_max_t, name="x")
-
-        # y_t = electricity *exported* to grid each hour [kWh]
-        self.y = self.m.addMVar(self.T, lb=0, ub=model_data.y_max_t, name="y")
-
-        # s_pv_t = PV energy *actually used* in each hour [kWh]
-        self.s_pv = self.m.addMVar(self.T, lb=0, ub=model_data.s_t, name="s_pv")  # ≤ available PV each hour
+        
+        # Core variables
+        self.d = self.m.addMVar(self.T, lb=0, ub=model_data.d_max_t, name="d")
+        self.x = self.m.addMVar(self.T, lb=0, name="x")  # No upper bound, penalties handle excess
+        self.y = self.m.addMVar(self.T, lb=0, name="y")  # No upper bound, penalties handle excess
+        self.s_pv = self.m.addMVar(self.T, lb=0, ub=model_data.s_t, name="s_pv")
+        
+        # Excess variables for penalty calculation
+        self.x_excess = self.m.addMVar(self.T, lb=0, name="x_excess")  # Import above limit
+        self.y_excess = self.m.addMVar(self.T, lb=0, name="y_excess")  # Export above limit
 
         # --- Constraints ---
-
-        # # Power balance: load met by *used* PV + net grid import
-        # for t in range(self.T):
-        #     self.m.addConstr(self.d[t] == self.s_pv[t] + self.x[t] - self.y[t], name=f"balance_{t}")
-
-        self.m.addConstr(self.d == self.s_pv + self.x - self.y, name=f"power_balance")
-
+        
+        # Power balance: load met by used PV + net grid import
+        self.m.addConstr(self.d == self.s_pv + self.x - self.y, name="power_balance")
 
         # Daily minimum energy consumption
-        self.m.addConstr(gp.quicksum(self.d[t] for t in range(self.T)) >= model_data.d_min_total, "min_total_load")
+        self.m.addConstr(gp.quicksum(self.d[t] for t in range(self.T)) >= model_data.d_min_total, 
+                        "min_total_load")
 
-        # --- Objective: minimize total daily net cost ---
+        # Excess import/export constraints
+        self.m.addConstr(self.x_excess >= self.x - model_data.x_max_t, name="excess_import")
+        self.m.addConstr(self.y_excess >= self.y - model_data.y_max_t, name="excess_export")
 
-        cost_expr = gp.quicksum(
+        # Load ramping constraints (if ramp rates < 1.0)
+        if model_data.ramp_up_max_ratio < 1.0 or model_data.ramp_down_max_ratio < 1.0:
+            max_ramp_up = model_data.ramp_up_max_ratio * model_data.d_max_t[0]
+            max_ramp_down = model_data.ramp_down_max_ratio * model_data.d_max_t[0]
+            
+            for t in range(1, self.T):
+                self.m.addConstr(self.d[t] - self.d[t-1] <= max_ramp_up, 
+                               f"ramp_up_{t}")
+                self.m.addConstr(self.d[t-1] - self.d[t] <= max_ramp_down, 
+                               f"ramp_down_{t}")
+
+        # Minimum load ratio constraint (if load must operate above minimum when on)
+        if model_data.d_min_ratio > 0:
+            # This would typically require binary variables for on/off state
+            # For now, simplified as minimum when non-zero
+            for t in range(self.T):
+                # If d[t] > 0, then d[t] >= d_min_ratio * d_max[t]
+                # This is a logical constraint that would need binary variables for exact implementation
+                pass  # Placeholder for more complex on/off logic
+
+        # --- Objective: minimize total daily net cost including penalties ---
+        
+        regular_cost = gp.quicksum(
             model_data.p_buy_t[t] * self.x[t]
             + model_data.tau_import_t[t] * self.x[t]
             - model_data.p_sell_t[t] * self.y[t]
             + model_data.tau_export_t[t] * self.y[t]
             for t in range(self.T)
         )
-        self.m.setObjective(cost_expr, GRB.MINIMIZE)
+        
+        penalty_cost = gp.quicksum(
+            model_data.penalty_excess_import * self.x_excess[t]
+            + model_data.penalty_excess_export * self.y_excess[t]
+            for t in range(self.T)
+        )
+        
+        total_cost = regular_cost + penalty_cost
+        self.m.setObjective(total_cost, GRB.MINIMIZE)
 
-        # Optional: set output flag as needed
+        # Set solver parameters
         self.m.setParam("OutputFlag", 1)
 
     def solve(self):
-        """Runs optimization and stores solution."""
+        """Runs optimization and stores enhanced solution."""
         self.m.optimize()
         self.solution = None
+        
         if self.m.status == GRB.OPTIMAL:
             self.solution = {
                 "d": [self.d[t].X for t in range(self.T)],
                 "s_pv": [self.s_pv[t].X for t in range(self.T)],
                 "x": [self.x[t].X for t in range(self.T)],
                 "y": [self.y[t].X for t in range(self.T)],
+                "x_excess": [self.x_excess[t].X for t in range(self.T)],
+                "y_excess": [self.y_excess[t].X for t in range(self.T)],
                 "obj": self.m.objVal,
+                "regular_cost": sum(
+                    self.data.p_buy_t[t] * self.x[t].X
+                    + self.data.tau_import_t[t] * self.x[t].X
+                    - self.data.p_sell_t[t] * self.y[t].X
+                    + self.data.tau_export_t[t] * self.y[t].X
+                    for t in range(self.T)
+                ),
+                "penalty_cost": sum(
+                    self.data.penalty_excess_import * self.x_excess[t].X
+                    + self.data.penalty_excess_export * self.y_excess[t].X
+                    for t in range(self.T)
+                ),
             }
+        
         return self.solution
