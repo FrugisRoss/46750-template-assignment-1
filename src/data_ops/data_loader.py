@@ -44,7 +44,7 @@ class DataLoader:
     question: str
     input_path: Path
 
-    def __init__(self, input_path: str = '/Users/lalka/Projects/46750-template-assignment-1/data/question_1a'):
+    def __init__(self, input_path):
         """
         Initializes the DataLoader with the base directory containing the JSON input files.
         :param base_path: Folder path where question 1a JSON data files are located.
