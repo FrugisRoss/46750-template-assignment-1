@@ -221,7 +221,7 @@ class DataProcessor:
             "pv_id": pv_id,
             "load_id": load_id,
             "assumptions": {
-                "symmetric_tariff": True,
+                "symmetric_tariff": False,
                 "sell_price_equals_buy_price": True,
                 "hour_resolution_h": 1.0,
             },
