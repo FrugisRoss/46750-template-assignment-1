@@ -8,3 +8,27 @@ Suggested structure:
 - Prepare input data for a single simulation or multiple simulations.
 - Execute main function when the script is run directly.
 """
+#%%
+from data_ops import DataLoader, DataProcessor
+from opt_model import OptModel
+
+# 1. Load and process data
+loader = DataLoader()
+raw = loader.get_data()
+processor = DataProcessor(raw)
+model_data = processor.build_model_data()
+
+# 2. Build and solve optimization model
+optm = OptModel(model_data)
+solution = optm.solve()
+
+# %%
+if solution:
+    print(f"Optimal cost: {solution['obj']}")
+    print(f"Scheduled load each hour: {solution['d']}")
+    print(f"PV usage each hour: {solution['s_pv']}")
+    print(f"Grid imports: {solution['x']}")
+    print(f"Grid exports: {solution['y']}")
+else:
+    print("No feasible solution found.")
+# %%
