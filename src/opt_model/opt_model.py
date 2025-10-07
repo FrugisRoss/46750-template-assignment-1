@@ -111,12 +111,8 @@ class OptModel:
         return self.solution
 
 
-class OptModel:
-    """
-    Gurobi optimization model for flexible consumer scheduling:
-    - Single flexible load, curtailable PV, daily energy target, tariffs, prices.
-    """
-
+class OptModelb1:
+    
     def __init__(self, model_data):
         """Initialize and set up the enhanced optimization model."""
         self.T = len(model_data.hours)
@@ -130,6 +126,7 @@ class OptModel:
         self.x = self.m.addMVar(self.T, lb=0, name="x")  # No upper bound, penalties handle excess
         self.y = self.m.addMVar(self.T, lb=0, name="y")  # No upper bound, penalties handle excess
         self.s_pv = self.m.addMVar(self.T, lb=0, ub=model_data.s_t, name="s_pv")
+        self.z = self.m.addMVar(self.T, lb=0, name="z")
         
         # Excess variables for penalty calculation
         self.x_excess = self.m.addMVar(self.T, lb=0, name="x_excess")  # Import above limit
@@ -140,10 +137,7 @@ class OptModel:
         # Power balance: load met by used PV + net grid import
         self.m.addConstr(self.d == self.s_pv + self.x - self.y, name="power_balance")
 
-        # Daily minimum energy consumption
-        self.m.addConstr(gp.quicksum(self.d[t] for t in range(self.T)) >= model_data.d_min_total, 
-                        "min_total_load")
-
+    
         # Excess import/export constraints
         self.m.addConstr(self.x_excess >= self.x - model_data.x_max_t, name="excess_import")
         self.m.addConstr(self.y_excess >= self.y - model_data.y_max_t, name="excess_export")
@@ -158,7 +152,7 @@ class OptModel:
                                f"ramp_up_{t}")
                 self.m.addConstr(self.d[t-1] - self.d[t] <= max_ramp_down, 
                                f"ramp_down_{t}")
-
+                
         # Minimum load ratio constraint (if load must operate above minimum when on)
         if model_data.d_min_ratio > 0:
             # This would typically require binary variables for on/off state
@@ -168,6 +162,13 @@ class OptModel:
                 # This is a logical constraint that would need binary variables for exact implementation
                 pass  # Placeholder for more complex on/off logic
 
+        
+        #Constraints for z to rapresent the absolute value of the load shift
+        self.m.addConstr(self.z - self.d - model_data.d_given_t >= 0, name="abs_val_pos")
+        self.m.addConstr(self.z + self.d - model_data.d_given_t >= 0, name="abs_val_neg")
+        
+
+
         # --- Objective: minimize total daily net cost including penalties ---
         
         regular_cost = gp.quicksum(
@@ -175,6 +176,7 @@ class OptModel:
             + model_data.tau_import_t[t] * self.x[t]
             - model_data.p_sell_t[t] * self.y[t]
             + model_data.tau_export_t[t] * self.y[t]
+            + model_data.p_pen[t] * self.z[t]
             for t in range(self.T)
         )
         
