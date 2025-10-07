@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple
 
 import numpy as np
@@ -67,12 +67,10 @@ class ModelData:
 
 @dataclass
 class ModelData1b(ModelData):
-    """
-    Extension of ModelData for 1b with additional attributes.
-    Inherits all fields from ModelData and adds new ones below.
-    """
-    p_pen: np.ndarray                    # penalty price for deviation from the reference given load (DKK/kWh)
-    d_given_t: np.ndarray                # given hourly load profile (kWh)
+    d_min_total: float = field(init=False, repr=False)
+    p_pen: np.ndarray
+    d_given_t: np.ndarray
+
 
 class DataProcessor:
     """
@@ -309,6 +307,9 @@ class DataProcessor1b(DataProcessor):
     Extension of DataProcessor for 1b, extracting d_given_t and p_pen for ModelData1b.
     """
 
+    def _extract_min_daily_energy(self, load_id: str) -> float:
+        pass
+
     def _extract_given_load_profile(self, load_id: str, T: int, d_max_per_h: float) -> np.ndarray:
         """
         Extract the given hourly load profile (d_given_t) for the specified load_id.
@@ -373,9 +374,6 @@ class DataProcessor1b(DataProcessor):
         x_max_t, y_max_t = self._bounds_from_bus(T)
         penalty_import, penalty_export = self._extract_penalty_costs()
 
-        # Daily minimum energy
-        d_min_total = self._extract_min_daily_energy(load_id)
-
         # Storage and heat pump (for future use)
         storage_params, heat_pump_params = self._extract_storage_heat_pump()
 
@@ -402,7 +400,6 @@ class DataProcessor1b(DataProcessor):
             tau_export_t=tau_export_t,
             penalty_excess_import=penalty_import,
             penalty_excess_export=penalty_export,
-            d_min_total=float(d_min_total),
             d_max_t=d_max_t,
             d_min_ratio=load_constraints["min_power_ratio"],
             x_max_t=x_max_t,

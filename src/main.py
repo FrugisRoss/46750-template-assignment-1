@@ -40,7 +40,7 @@ else:
 ############## Question 1b ##############
 
 # 1. Load and process data
-loader = DataLoader(input_path='/Users/rofrug/Library/CloudStorage/OneDrive-DanmarksTekniskeUniversitet/First Year PhD/46750 Optimization in modern power systems/46750-template-assignment-1/data/question_1a')
+loader = DataLoader(input_path='/Users/rofrug/Library/CloudStorage/OneDrive-DanmarksTekniskeUniversitet/First Year PhD/46750 Optimization in modern power systems/46750-template-assignment-1/data/question_1b')
 raw = loader.get_data()
 print(raw)
 processor = DataProcessor1b(raw)
