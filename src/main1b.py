@@ -1,6 +1,7 @@
 #%%
 from data_ops import DataLoader, DataProcessor
 from data_ops.data_processor import DataProcessor1b
+from data_ops.data_processor import update_penalty_load_shifting
 from opt_model import OptModel
 from opt_model.opt_model import OptModelb1
 import numpy as np
@@ -9,6 +10,9 @@ from data_ops.data_visualizer import plot_column_vs_hours
 # %%
 ############## Question 1b ##############
 
+#Set the penalty for load shifting
+load_shifting_penalty = 0.6
+update_penalty_load_shifting(f'/Users/rofrug/Library/CloudStorage/OneDrive-DanmarksTekniskeUniversitet/First Year PhD/46750 Optimization in modern power systems/46750-template-assignment-1/data/question_1b/usage_preferences.json', load_shifting_penalty)
 # 1. Load and process data
 loader = DataLoader(input_path='/Users/rofrug/Library/CloudStorage/OneDrive-DanmarksTekniskeUniversitet/First Year PhD/46750 Optimization in modern power systems/46750-template-assignment-1/data/question_1b')
 raw = loader.get_data()

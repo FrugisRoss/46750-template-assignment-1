@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 from typing import Dict, Any, List, Optional, Tuple
 
 import numpy as np
@@ -429,3 +430,41 @@ class DataProcessor1b(DataProcessor):
             p_pen=p_pen,
             d_given_t=d_given_t,
         )
+    
+    import json
+from pathlib import Path
+
+def update_penalty_load_shifting(file_path: str, new_penalty: float, load_id: str = "FFL_01") -> None:
+    """
+    Updates the 'penalty_load_shifting' value in a usage_preferences.json file
+    for the given load_id.
+
+    Args:
+        file_path (str): Path to the usage_preferences.json file.
+        new_penalty (float): New penalty value to assign.
+        load_id (str, optional): Target load_id to update. Defaults to "FFL_01".
+    """
+    file_path = Path(file_path)
+
+    # --- Load existing JSON ---
+    with file_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # --- Update penalty value ---
+    updated = False
+    for entry in data:
+        load_prefs = entry.get("load_preferences", [])
+        for lp in load_prefs:
+            if lp.get("load_id") == load_id:
+                lp["penalty_load_shifting"] = float(new_penalty)
+                updated = True
+                break
+
+    if not updated:
+        raise ValueError(f"load_id '{load_id}' not found in {file_path}")
+
+    # --- Save back to file (with nice formatting) ---
+    with file_path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+
+
