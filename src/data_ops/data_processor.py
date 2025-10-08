@@ -68,7 +68,7 @@ class ModelData:
 @dataclass
 class ModelData1b(ModelData):
     
-    p_pen: np.ndarray
+    p_pen: float
     d_given_t: np.ndarray
 
 
