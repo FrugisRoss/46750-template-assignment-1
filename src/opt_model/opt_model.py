@@ -133,6 +133,10 @@ class OptModelb1:
         self.y_excess = self.m.addMVar(self.T, lb=0, name="y_excess")  # Export above limit
 
         # --- Constraints ---
+
+        # Daily minimum energy consumption
+        self.m.addConstr(gp.quicksum(self.d[t] for t in range(self.T)) >= model_data.d_min_total, 
+                        "min_total_load")
         
         # Power balance: load met by used PV + net grid import
         self.m.addConstr(self.d == self.s_pv + self.x - self.y, name="power_balance")
@@ -164,9 +168,10 @@ class OptModelb1:
 
         
         #Constraints for z to rapresent the absolute value of the load shift
-        self.m.addConstr(self.z - self.d - model_data.d_given_t >= 0, name="abs_val_pos")
-        self.m.addConstr(self.z + self.d - model_data.d_given_t >= 0, name="abs_val_neg")
-        
+        for t in range(self.T):
+            self.m.addConstr(self.z[t] - self.d[t] + model_data.d_given_t[t] >= 0, name=f"abs_pos_{t}")
+            self.m.addConstr(self.z[t] + self.d[t] - model_data.d_given_t[t] >= 0, name=f"abs_neg_{t}")
+
 
 
         # --- Objective: minimize total daily net cost including penalties ---
@@ -176,13 +181,13 @@ class OptModelb1:
             + model_data.tau_import_t[t] * self.x[t]
             - model_data.p_sell_t[t] * self.y[t]
             + model_data.tau_export_t[t] * self.y[t]
-            + model_data.p_pen[t] * self.z[t]
             for t in range(self.T)
         )
         
         penalty_cost = gp.quicksum(
             model_data.penalty_excess_import * self.x_excess[t]
             + model_data.penalty_excess_export * self.y_excess[t]
+            + model_data.p_pen * self.z[t]
             for t in range(self.T)
         )
         
@@ -216,8 +221,11 @@ class OptModelb1:
                 "penalty_cost": sum(
                     self.data.penalty_excess_import * self.x_excess[t].X
                     + self.data.penalty_excess_export * self.y_excess[t].X
+                    + self.data.p_pen * self.z[t].X
+
                     for t in range(self.T)
                 ),
+                "z": [self.z[t].X for t in range(self.T)],
             }
         
         return self.solution

@@ -67,7 +67,7 @@ class ModelData:
 
 @dataclass
 class ModelData1b(ModelData):
-    d_min_total: float = field(init=False, repr=False)
+    
     p_pen: np.ndarray
     d_given_t: np.ndarray
 
@@ -307,14 +307,13 @@ class DataProcessor1b(DataProcessor):
     Extension of DataProcessor for 1b, extracting d_given_t and p_pen for ModelData1b.
     """
 
-    def _extract_min_daily_energy(self, load_id: str) -> float:
-        pass
 
     def _extract_given_load_profile(self, load_id: str, T: int, d_max_per_h: float) -> np.ndarray:
         """
         Extract the given hourly load profile (d_given_t) for the specified load_id.
-        Returns a numpy array of length T (typically 24).
-        If not found, raises ValueError.
+        Returns a numpy array of length T (typically 24) with absolute hourly values
+        (kWh) obtained by scaling the hourly_profile_ratio by d_max_per_h.
+        If not found or malformed, raises ValueError.
         """
         prefs = self._extract_usage_pref()
         lp = prefs.get("load_preferences", []) or []
@@ -325,19 +324,21 @@ class DataProcessor1b(DataProcessor):
                 break
         if entry is None:
             raise ValueError(f"No usage preference found for load_id={load_id}.")
-        profile = entry.get("hourly_profile_ratio", None)
-        if profile is None or len(profile) != T:
-            raise ValueError(f"hourly_profile_ratio missing or wrong length for load_id={load_id}.")
-        # Convert ratio to kWh using d_max_per_h
-        return d_max_per_h * np.asarray(profile, dtype=float)
 
-    def _extract_penalty_profile(self, load_id: str, T: int) -> np.ndarray:
-        """
-        Extract the penalty price (p_pen) for deviation from d_given_t.
-        The penalty is a scalar value (not a profile) and is found under
-        "penalty_load_shifting" in the same entry as the given load profile.
-        Returns a numpy array of length T filled with this value.
-        """
+        # Extract ratio profile and validate
+        d_given_ratio = entry.get("hourly_profile_ratio", None)
+        if d_given_ratio is None:
+            raise ValueError(f"hourly_profile_ratio missing for load_id={load_id}.")
+        if len(d_given_ratio) != T:
+            raise ValueError(f"hourly_profile_ratio length {len(d_given_ratio)} != T={T} for load_id={load_id}.")
+
+        # Convert to absolute hourly values (kWh) by scaling with d_max_per_h
+        d_given_t = np.asarray([float(v) for v in d_given_ratio], dtype=float) #* float(d_max_per_h)
+        return d_given_t
+
+
+    def _extract_penalty_profile(self, load_id: str) -> float:
+
         prefs = self._extract_usage_pref()
         lp = prefs.get("load_preferences", []) or []
         entry = None
@@ -346,10 +347,12 @@ class DataProcessor1b(DataProcessor):
                 entry = p
                 break
         if entry is not None and "penalty_load_shifting" in entry and entry["penalty_load_shifting"] is not None:
-            pen = float(entry["penalty_load_shifting"])
-            return np.full(T, pen, dtype=float)
+            p_pen = float(entry["penalty_load_shifting"])
+            return float(p_pen)
         else:
-            return np.zeros(T, dtype=float)
+            raise ValueError(f"Penalty profile not found for load_id={load_id}.")
+        
+       
 
     def build_model_data(self) -> ModelData1b:
         """
@@ -358,6 +361,7 @@ class DataProcessor1b(DataProcessor):
         # time and prices
         p_buy_t, p_sell_t, tau_import_t, tau_export_t, hours = self._extract_prices_and_tariffs()
         T = len(hours)
+
 
         # PV availability s_t
         pv_nameplate_kW, pv_id = self._extract_pv_specs()
@@ -379,7 +383,16 @@ class DataProcessor1b(DataProcessor):
 
         # d_given_t and p_pen
         d_given_t = self._extract_given_load_profile(load_id, T, d_max_per_h)
-        p_pen = self._extract_penalty_profile(load_id, T)
+        p_pen = self._extract_penalty_profile(load_id)
+
+        # Daily minimum energy
+        d_min_total = self._extract_min_daily_energy(load_id)
+
+        # Validation
+        if np.any(p_buy_t < 0) or np.any(p_sell_t < 0) or np.any(tau_import_t < 0) or np.any(tau_export_t < 0):
+            raise ValueError("Negative prices/tariffs are not supported.")
+        if d_min_total < 0:
+            raise ValueError("Minimum daily energy must be >= 0.")
 
         notes = {
             "pv_id": pv_id,
@@ -400,6 +413,7 @@ class DataProcessor1b(DataProcessor):
             tau_export_t=tau_export_t,
             penalty_excess_import=penalty_import,
             penalty_excess_export=penalty_export,
+            d_min_total=float(d_min_total),
             d_max_t=d_max_t,
             d_min_ratio=load_constraints["min_power_ratio"],
             x_max_t=x_max_t,

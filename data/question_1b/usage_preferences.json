@@ -5,7 +5,7 @@
     "load_preferences":[
         {
             "load_id": "FFL_01",
-            "min_total_energy_per_day_hour_equivalent": null,
+            "min_total_energy_per_day_hour_equivalent": 0,
             "max_total_energy_per_day_hour_equivalent": null,
             "hourly_profile_ratio": [
                 0.055,
@@ -34,7 +34,7 @@
                 0.055
             ],
             
-            "penalty_load_shifting": 0.6 
+            "penalty_load_shifting": 100
         }
     ],
     "storage_preferences": null,
