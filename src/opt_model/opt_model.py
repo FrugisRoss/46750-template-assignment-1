@@ -233,33 +233,29 @@ class OptModelb1:
         
         return self.solution
     
-    def save_LP_results(self):
+    def save_LP_duals(self):
         """
         Extract and save primal and dual values from the solved optimization model.
         Returns:
             tuple: (optimal_objective, optimal_variables, optimal_duals)
         """
         if self.m.status == GRB.OPTIMAL:
-            # Save optimal primal values (decision variables)
-            optimal_variables = {v.VarName: v.X for v in self.m.getVars()}
+            
             
             # Save dual values (shadow prices of constraints)
             optimal_duals = {c.ConstrName: c.Pi for c in self.m.getConstrs()}
             
-            # Save objective value
-            optimal_objective = self.m.objVal
             
-            # Store internally for later access
-            self.optimal_variables = optimal_variables
+            
             self.optimal_duals = optimal_duals
-            self.optimal_objective = optimal_objective
+            
         else:
             print("Optimization was not successful. Cannot extract LP results.")
-            optimal_variables = None
+            
             optimal_duals = None
-            optimal_objective = None
+            
 
-        return optimal_objective, optimal_variables, optimal_duals
+        return  optimal_duals
     
     def print_LP_results(self):
         """
@@ -268,6 +264,11 @@ class OptModelb1:
         if self.m.status == GRB.OPTIMAL:
             print("\n-------------------   RESULTS  -------------------")
             print(f"Optimal objective value: {self.m.objVal:.4f}\n")
+            
+            if hasattr(self, "solution") and self.solution is not None and "penalty_cost" in self.solution:
+                print(f"Total Penalty: {round(self.solution['penalty_cost'], 2)}\n")
+            else:
+                print("Total Penalty: (not available)\n")
             
             print("Decision variables (primal values):")
             for v in self.m.getVars():
