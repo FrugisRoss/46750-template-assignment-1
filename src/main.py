@@ -34,6 +34,8 @@ if solution:
     print(f"PV usage each hour: {solution['s_pv']}")
     print(f"Grid imports: {solution['x']}")
     print(f"Grid exports: {solution['y']}")
+    print("Total Penalty:", round(solution['penalty_cost'], 2))
 else:
     print("No feasible solution found.")
 #
+# %%

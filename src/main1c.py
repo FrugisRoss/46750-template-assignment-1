@@ -12,9 +12,9 @@ from data_ops.data_visualizer import plot_column_vs_hours
 
 #Set the penalty for load shifting
 load_shifting_penalty = 0.6
-update_penalty_load_shifting(f'../46750-template-assignment-1/data/question_1b/usage_preferences.json', load_shifting_penalty)
+update_penalty_load_shifting(f'../46750-template-assignment-1/data/question_1c/usage_preferences.json', load_shifting_penalty)
 # 1. Load and process data
-loader = DataLoader(input_path='../46750-template-assignment-1/data/question_1b')
+loader = DataLoader(input_path='../46750-template-assignment-1/data/question_1c')
 raw = loader.get_data()
 #print(raw)
 processor = DataProcessor1b(raw)
