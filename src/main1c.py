@@ -1,9 +1,8 @@
 #%%
-from data_ops import DataLoader, DataProcessor
-from data_ops.data_processor import DataProcessor1b
+from data_ops import DataLoader
+from data_ops.data_processor import DataProcessor1c
 from data_ops.data_processor import update_penalty_load_shifting
-from opt_model import OptModel
-from opt_model.opt_model import OptModelb1
+from opt_model.opt_model import OptModelc1
 import numpy as np
 from data_ops.data_visualizer import plot_column_vs_hours
 
@@ -11,13 +10,14 @@ from data_ops.data_visualizer import plot_column_vs_hours
 ############## Question 1b ##############
 
 #Set the penalty for load shifting
-load_shifting_penalty = 0.6
+load_shifting_penalty = 3.0  # Penalty cost per kWh of load shifting
+# Update the usage_preferences.json file with the new penalty
 update_penalty_load_shifting(f'../46750-template-assignment-1/data/question_1c/usage_preferences.json', load_shifting_penalty)
 # 1. Load and process data
 loader = DataLoader(input_path='../46750-template-assignment-1/data/question_1c')
 raw = loader.get_data()
 #print(raw)
-processor = DataProcessor1b(raw)
+processor = DataProcessor1c(raw)
 model_data = processor.build_model_data()
 #print(model_data)
 print(model_data.d_given_t)
@@ -26,8 +26,9 @@ print(model_data.p_pen)
 
 #%%
 # 2. Build and solve optimization model
-optm = OptModelb1(model_data)
+optm = OptModelc1(model_data)
 solution = optm.solve()
+
 
 # %%
 if solution:
@@ -43,5 +44,6 @@ else:
 # %%
 plot_column_vs_hours(solution, column='d', y_label="Served Load [kWh]", figsize=(10, 4), hour_start=0, ax=None, title="Served Load vs Hour", show=True)
 plot_column_vs_hours(solution, column='z', y_label="Absolute Load Shift [kWh]", figsize=(10, 4), hour_start=0, ax=None, title="Absolute Load Shift vs Hour", show=True)
+
 
 # %%
