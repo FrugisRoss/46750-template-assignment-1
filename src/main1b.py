@@ -29,6 +29,12 @@ print(model_data.p_pen)
 optm = OptModelb1(model_data)
 solution = optm.solve()
 
+# Save LP results
+obj, vars, duals = optm.save_LP_results()
+
+# Print LP results
+optm.print_LP_results()
+
 # %%
 if solution:
     print("Scheduled load each hour:", np.array(solution['d']).round(2).tolist())

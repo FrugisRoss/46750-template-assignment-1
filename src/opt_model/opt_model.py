@@ -109,6 +109,9 @@ class OptModel:
             }
         
         return self.solution
+    
+    
+
 
 
 class OptModelb1:
@@ -229,3 +232,53 @@ class OptModelb1:
             }
         
         return self.solution
+    
+    def save_LP_results(self):
+        """
+        Extract and save primal and dual values from the solved optimization model.
+        Returns:
+            tuple: (optimal_objective, optimal_variables, optimal_duals)
+        """
+        if self.m.status == GRB.OPTIMAL:
+            # Save optimal primal values (decision variables)
+            optimal_variables = {v.VarName: v.X for v in self.m.getVars()}
+            
+            # Save dual values (shadow prices of constraints)
+            optimal_duals = {c.ConstrName: c.Pi for c in self.m.getConstrs()}
+            
+            # Save objective value
+            optimal_objective = self.m.objVal
+            
+            # Store internally for later access
+            self.optimal_variables = optimal_variables
+            self.optimal_duals = optimal_duals
+            self.optimal_objective = optimal_objective
+        else:
+            print("Optimization was not successful. Cannot extract LP results.")
+            optimal_variables = None
+            optimal_duals = None
+            optimal_objective = None
+
+        return optimal_objective, optimal_variables, optimal_duals
+    
+    def print_LP_results(self):
+        """
+        Nicely print the LP results: objective, decision variable values, and duals.
+        """
+        if self.m.status == GRB.OPTIMAL:
+            print("\n-------------------   RESULTS  -------------------")
+            print(f"Optimal objective value: {self.m.objVal:.4f}\n")
+            
+            print("Decision variables (primal values):")
+            for v in self.m.getVars():
+                print(f"  {v.VarName:20s} = {v.X:10.4f}")
+            
+            print("\nDual variables (shadow prices):")
+            for c in self.m.getConstrs():
+                print(f"  {c.ConstrName:20s} = {c.Pi:10.4f}")
+            
+            print("--------------------------------------------------\n")
+        
+        else:
+            print("Optimization was not successful. No results to print.")
+
