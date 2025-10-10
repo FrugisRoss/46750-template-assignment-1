@@ -6,12 +6,13 @@ from opt_model import OptModel
 from opt_model.opt_model import OptModelb1
 import numpy as np
 from data_ops.data_visualizer import plot_column_vs_hours, plot_sensitivity_vs_hours
-
+import os
+import matplotlib.pyplot as plt
 # %%
 ############## Question 1b ##############
 
 #Set the penalty for load shifting
-load_shifting_penalty = 0.6
+load_shifting_penalty = 1.8
 update_penalty_load_shifting(f'/Users/rofrug/Library/CloudStorage/OneDrive-DanmarksTekniskeUniversitet/First Year PhD/46750 Optimization in modern power systems/46750-template-assignment-1/data/question_1b/usage_preferences.json', load_shifting_penalty)
 # 1. Load and process data
 loader = DataLoader(input_path='/Users/rofrug/Library/CloudStorage/OneDrive-DanmarksTekniskeUniversitet/First Year PhD/46750 Optimization in modern power systems/46750-template-assignment-1/data/question_1b')
@@ -38,12 +39,27 @@ optm.print_LP_results()
 
 
 # %%
-plot_column_vs_hours(solution, column='d', y_label="Served Load [kWh]", figsize=(10, 4), hour_start=0, ax=None, title="Served Load vs Hour", show=True)
-plot_column_vs_hours(solution, column='z', y_label="Absolute Load Shift [kWh]", figsize=(10, 4), hour_start=0, ax=None, title="Absolute Load Shift vs Hour", show=True)
+
+
+out_dir = '/Users/rofrug/Library/CloudStorage/OneDrive-DanmarksTekniskeUniversitet/First Year PhD/46750 Optimization in modern power systems/Assignments'
+os.makedirs(out_dir, exist_ok=True)
+
+
+fig, ax = plt.subplots(figsize=(10, 4))
+plot_column_vs_hours(solution, column='d', y_label="Served Load [kWh]", figsize=(10, 4), hour_start=0, ax=ax, title="Served Load vs Hour", show=False)
+fig.savefig(os.path.join(out_dir, 'served_load_vs_hour_base.pdf'), format='pdf', bbox_inches='tight')
+plt.show(fig)
+
+# Absolute load shift plot -> save as vector (SVG and PDF)
+fig2, ax2 = plt.subplots(figsize=(10, 4))
+plot_column_vs_hours(solution, column='z', y_label="Absolute Load Shift [kWh]", figsize=(10, 4), hour_start=0, ax=ax2, title="Absolute Load Shift vs Hour", show=False)
+fig2.savefig(os.path.join(out_dir, 'absolute_load_shift_vs_hour_base.pdf'), format='pdf', bbox_inches='tight')
+plt.show(fig2)
+
 
 # %%
+out_dir = '/Users/rofrug/Library/CloudStorage/OneDrive-DanmarksTekniskeUniversitet/First Year PhD/46750 Optimization in modern power systems/Assignments'
 
-# %%
 ############## Sensitivity Analysis ##############
 
 def run_penalty_sensitivity(penalty_values, json_path, data_path, model_class):
@@ -62,7 +78,7 @@ def run_penalty_sensitivity(penalty_values, json_path, data_path, model_class):
     all_solutions = {}
 
     for penalty in penalty_values:
-        print(f"\n🔹 Running model for load_shifting_penalty = {penalty}")
+        print(f"\n--------- Running model for load_shifting_penalty = {penalty} --------")
 
         # Update penalty in JSON
         update_penalty_load_shifting(json_path, penalty)
@@ -76,11 +92,17 @@ def run_penalty_sensitivity(penalty_values, json_path, data_path, model_class):
         # Build and solve model
         optm = model_class(model_data)
         solution = optm.solve()
+        # Save LP results
+        duals = optm.save_LP_duals()
+
+        # Print LP results
+        optm.print_LP_results()
         all_solutions[penalty] = solution
+        
 
     return all_solutions
 
-penalty_values = [ 0.2, 1.0, 1.8, 2.6, 3.4 ]
+penalty_values = [ 0.2, 3.4 ]
 
 json_path = '/Users/rofrug/Library/CloudStorage/OneDrive-DanmarksTekniskeUniversitet/First Year PhD/46750 Optimization in modern power systems/46750-template-assignment-1/data/question_1b/usage_preferences.json'
 data_path = '/Users/rofrug/Library/CloudStorage/OneDrive-DanmarksTekniskeUniversitet/First Year PhD/46750 Optimization in modern power systems/46750-template-assignment-1/data/question_1b'
@@ -92,11 +114,31 @@ solutions = run_penalty_sensitivity(
     model_class=OptModelb1
 )
 
-# Plot served load vs hours
-plot_sensitivity_vs_hours(solutions, column="d", y_label="Served Load [kWh]", title="Served Load vs Hour for Different Penalties", legend_title="Load shifting penalty")
+# Plot served load vs hours and save
+fig3, ax3 = plt.subplots(figsize=(10, 4))
+fig3, ax3 = plot_sensitivity_vs_hours(
+    solutions,
+    column="d",
+    y_label="Served Load [kWh]",
+    title="Served Load vs Hour for Different Penalties",
+    legend_title="Load shifting penalty",
+    ax=ax3,
+    show=False,
+)
+#fig3.savefig(os.path.join(out_dir, 'served_load_vs_hour_sensitivity.pdf'), format='pdf', bbox_inches='tight')
+plt.show(fig3)
 
-
-# Plot absolute load shift vs hours
-plot_sensitivity_vs_hours(solutions, column="z", y_label="Absolute Load Shift [kWh]", title="Load Shift vs Hour for Different Penalties", legend_title="Load shifting penalty")
+fig4, ax4 = plt.subplots(figsize=(10, 4))
+fig4, ax4 = plot_sensitivity_vs_hours(
+    solutions,
+    column="z",
+    y_label="Absolute Load Shift [kWh]",
+    title="Load Shift vs Hour for Different Penalties",
+    legend_title="Load shifting penalty",
+    ax=ax4,
+    show=False,
+)
+#fig4.savefig(os.path.join(out_dir, 'absolute_load_shift_vs_hour_sensitivity.pdf'), format='pdf', bbox_inches='tight')
+plt.show(fig4)
 
 # %%

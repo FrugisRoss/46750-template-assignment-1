@@ -142,7 +142,8 @@ class OptModelb1:
                         "min_total_load")
         
         # Power balance: load met by used PV + net grid import
-        self.m.addConstr(self.d == self.s_pv + self.x - self.y, name="power_balance")
+        self.m.addConstr(self.d -self.s_pv - self.x + self.y <= 0, name="power_balance_le")
+        self.m.addConstr(self.d -self.s_pv - self.x + self.y >= 0, name="power_balance_ue")
 
     
         # Excess import/export constraints
