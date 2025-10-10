@@ -50,4 +50,49 @@ def plot_column_vs_hours(data, column, y_label, figsize=(10, 4), hour_start=0, a
     if show:
         plt.show()
 
- 
+
+
+def plot_sensitivity_vs_hours(solutions_dict, column, y_label, figsize=(10, 4), hour_start=0,
+                              title=None, ax=None, show=True, legend_title=None):
+    """
+    Plot a given column (e.g., 'd' or 'z') vs hours for multiple penalty values.
+
+    Args:
+        solutions_dict: dict {penalty_value: solution_dict}
+        column: string, column name to plot
+        y_label: string, y-axis label
+        legend_title: optional string for the legend title (default: None)
+        ax: matplotlib axis to plot on (optional)
+        show: whether to call plt.show() (default: True)
+    """
+
+
+    sns.set_style("whitegrid")
+
+    # Use provided axis, or create a new figure/axis
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure  # get the figure from the provided axis
+
+    for penalty, sol in solutions_dict.items():
+        df = pd.DataFrame(sol)
+        if column not in df.columns:
+            continue  # skip if not in solution
+
+        n = len(df)
+        hours = list(range(hour_start, hour_start + n))
+        y = pd.to_numeric(df[column], errors="coerce")
+
+        ax.plot(hours, y, marker="o", linestyle="-", label=f"{penalty}")
+
+    ax.set_xlabel("Hour [h]")
+    ax.set_ylabel(y_label)
+    ax.set_title(f"{column} vs Hour" if not title else title)
+    ax.legend(title=legend_title, bbox_to_anchor=(1.05, 1), loc="upper left")
+    plt.tight_layout()
+
+    if show:
+        plt.show()
+
+    return fig, ax

@@ -34,7 +34,7 @@
                     0.075,
                     0.055
                 ],
-                "penalty_load_shifting": 0.6
+                "penalty_load_shifting": 3.4
             }
         ],
         "storage_preferences": null,

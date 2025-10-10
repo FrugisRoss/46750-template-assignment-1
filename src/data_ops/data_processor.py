@@ -334,7 +334,7 @@ class DataProcessor1b(DataProcessor):
             raise ValueError(f"hourly_profile_ratio length {len(d_given_ratio)} != T={T} for load_id={load_id}.")
 
         # Convert to absolute hourly values (kWh) by scaling with d_max_per_h
-        d_given_t = np.asarray([float(v) for v in d_given_ratio], dtype=float) #* float(d_max_per_h)
+        d_given_t = np.asarray([float(v) for v in d_given_ratio], dtype=float) * float(d_max_per_h)
         return d_given_t
 
 
