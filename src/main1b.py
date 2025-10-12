@@ -15,7 +15,7 @@ grandparent_dir = Path(__file__).resolve().parents[1]
 ############## Question 1b ##############
 
 #Set the penalty for load shifting
-load_shifting_penalty = 0.6
+load_shifting_penalty = 1.8
 update_penalty_load_shifting(grandparent_dir / "data" / "question_1b"/"usage_preferences.json", load_shifting_penalty)
 # 1. Load and process data
 loader = DataLoader(input_path=grandparent_dir / "data" / "question_1b")

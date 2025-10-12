@@ -377,14 +377,17 @@ class OptModelc1:
  
         # Battery discharge limit linked to SOC
         for t in range(self.T):
-            if t > 0:
+            if t > 0: # From second time step onwards, use previous SOC
                 self.m.addConstr(self.b_d[t] <= self.b_soc[t-1], name=f"discharge_limit_{t}")
-            else:
+            elif t == self.T - 1: # Last time step, ensure final SOC is met
+                    self.m.addConstr(self.b_d[0] <= model_data.final_soc_ratio * model_data.storage_capacity_kWh - self.b_soc[t-1], name="discharge_limit_end")
+            else: # First time step, use initial SOC
                 self.m.addConstr(self.b_d[0] <= model_data.initial_soc_ratio * model_data.storage_capacity_kWh, name="discharge_limit_0")
  
         # Charging cannot exceed remaining SOC capacity
         for t in range(self.T):
             self.m.addConstr(self.b_c[t] <= model_data.storage_capacity_kWh - self.b_soc[t], name=f"charge_limit_{t}")
+
 
         
         # SOC evolution for all hours from 1 to T-1
@@ -529,13 +532,13 @@ class OptModelc1:
             else:
                 print("Total Penalty: (not available)\n")
             
-            # print("Decision variables (primal values):")
-            # for v in self.m.getVars():
-            #     print(f"  {v.VarName:20s} = {v.X:10.4f}")
+            print("Decision variables (primal values):")
+            for v in self.m.getVars():
+                print(f"  {v.VarName:20s} = {v.X:10.4f}")
             
-            # print("\nDual variables (shadow prices):")
-            # for c in self.m.getConstrs():
-            #     print(f"  {c.ConstrName:20s} = {c.Pi:10.4f}")
+            print("\nDual variables (shadow prices):")
+            for c in self.m.getConstrs():
+                print(f"  {c.ConstrName:20s} = {c.Pi:10.4f}")
             
             print("--------------------------------------------------\n")
         
