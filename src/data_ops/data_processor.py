@@ -74,9 +74,30 @@ class ModelData1b(ModelData):
 
 @dataclass
 class ModelData1c(ModelData):
-    
+    """
+    Extended ModelData for '1c' case.
+ 
+    Adds:
+      - p_pen: penalty for load shifting (DKK/kWh)
+      - d_given_t: fixed given hourly demand profile (kWh)
+      - explicit storage fields (so you can access them directly)
+      - explicit heat-pump fields (if available)
+    """
+ 
+    # penalty and given load
     p_pen: float
     d_given_t: np.ndarray
+ 
+    # -- explicit storage fields (individual parameters) --
+    # present if a storage preference exists; otherwise None
+    storage_id: Optional[str] = None
+    initial_soc_ratio: Optional[float] = None  # 0..1
+    final_soc_ratio: Optional[float] = None    # 0..1
+    storage_capacity_kWh: Optional[float] = None
+    power_charge_max_kW: Optional[float] = None
+    power_discharge_max_kW: Optional[float] = None
+    charging_efficiency: Optional[float] = None   # 0..1
+    discharging_efficiency: Optional[float] = None  # 0..1
     
 
 class DataProcessor:
@@ -473,8 +494,207 @@ def update_penalty_load_shifting(file_path: str, new_penalty: float, load_id: st
         json.dump(data, f, indent=4, ensure_ascii=False)
 
 
-
 class DataProcessor1c(DataProcessor):
+    """
+    Extension of DataProcessor for 1c, extracting d_given_t and p_pen for ModelData1c as well as battery params.
+    """
+ 
+ 
+    def _extract_given_load_profile(self, load_id: str, T: int, d_max_per_h: float) -> np.ndarray:
+        """
+        Extract the given hourly load profile (d_given_t) for the specified load_id.
+        Returns a numpy array of length T (typically 24) with absolute hourly values
+        (kWh) obtained by scaling the hourly_profile_ratio by d_max_per_h.
+        If not found or malformed, raises ValueError.
+        """
+        prefs = self._extract_usage_pref()
+        lp = prefs.get("load_preferences", []) or []
+        entry = None
+        for p in lp:
+            if p.get("load_id") == load_id:
+                entry = p
+                break
+        if entry is None:
+            raise ValueError(f"No usage preference found for load_id={load_id}.")
+ 
+        # Extract ratio profile and validate
+        d_given_ratio = entry.get("hourly_profile_ratio", None)
+        if d_given_ratio is None:
+            raise ValueError(f"hourly_profile_ratio missing for load_id={load_id}.")
+        if len(d_given_ratio) != T:
+            raise ValueError(f"hourly_profile_ratio length {len(d_given_ratio)} != T={T} for load_id={load_id}.")
+ 
+        # Convert to absolute hourly values (kWh) by scaling with d_max_per_h
+        d_given_t = np.asarray([float(v) for v in d_given_ratio], dtype=float) * float(d_max_per_h)
+        return d_given_t
+ 
+ 
+    def _extract_penalty_profile(self, load_id: str) -> float:
+ 
+        prefs = self._extract_usage_pref()
+        lp = prefs.get("load_preferences", []) or []
+        entry = None
+        for p in lp:
+            if p.get("load_id") == load_id:
+                entry = p
+                break
+        if entry is not None and "penalty_load_shifting" in entry and entry["penalty_load_shifting"] is not None:
+            p_pen = float(entry["penalty_load_shifting"])
+            return float(p_pen)
+        else:
+            raise ValueError(f"Penalty profile not found for load_id={load_id}.")
+        
+    def _normalize_pref_block(self, block):
+        """
+        Accepts None, dict, or list and returns a single dict or None.
+        If list, returns first element (or None if empty).
+        """
+        if block is None:
+            return None
+        if isinstance(block, dict):
+            return block
+        if isinstance(block, list):
+            return block[0] if len(block) > 0 else None
+        # unknown shape -> return None (do not raise here to be robust)
+        return None
+       
+ 
+    def build_model_data(self) -> ModelData1c:
+        """
+        Returns ModelData1c with d_given_t and p_pen extracted.
+        """
+        # time and prices
+        p_buy_t, p_sell_t, tau_import_t, tau_export_t, hours = self._extract_prices_and_tariffs()
+        T = len(hours)
+ 
+        # PV availability s_t
+        pv_nameplate_kW, pv_id = self._extract_pv_specs()
+        profile = self._extract_pv_profile()
+        if len(profile) != T:
+            raise ValueError(f"PV profile length {len(profile)} != T={T}.")
+        s_t = pv_nameplate_kW * np.asarray(profile, dtype=float)
+ 
+        # Flexible load bounds and constraints
+        d_max_per_h, load_id, load_constraints = self._extract_flexible_load_specs()
+        d_max_t = np.full(T, d_max_per_h, dtype=float)
+ 
+        # Grid bounds and penalty costs
+        x_max_t, y_max_t = self._bounds_from_bus(T)
+        penalty_import, penalty_export = self._extract_penalty_costs()
+ 
+        # Storage and heat pump (for future use)
+        storage_params_raw, heat_pump_params = self._extract_storage_heat_pump()
+        storage_params = self._normalize_pref_block(storage_params_raw)
+ 
+        storage_id: Optional[str] = None
+        storage_capacity_kWh: Optional[float] = None
+        power_charge_max_kW: Optional[float] = None
+        power_discharge_max_kW: Optional[float] = None
+        charge_efficiency: Optional[float] = None
+        discharge_efficiency: Optional[float] = None
+        initial_soc_ratio: Optional[float] = None
+        final_soc_ratio: Optional[float] = None
+ 
+        if storage_params:
+            # basic identity
+            storage_id = storage_params.get("storage_id")
+ 
+            # capacity
+            if "storage_capacity_kWh" in storage_params and storage_params["storage_capacity_kWh"] is not None:
+                storage_capacity_kWh = float(storage_params["storage_capacity_kWh"])
+ 
+            # interpret max_*_power_ratio as fraction of energy capacity per hour (kW)
+            # i.e., 1.0 means power = capacity_kWh (full charge/discharge in 1 hour)
+            if storage_capacity_kWh is not None:
+                if "max_charging_power_ratio" in storage_params and storage_params["max_charging_power_ratio"] is not None:
+                    power_charge_max_kW = (
+                        float(storage_params["max_charging_power_ratio"]) * storage_capacity_kWh
+                    )
+                if "max_discharging_power_ratio" in storage_params and storage_params["max_discharging_power_ratio"] is not None:
+                    power_discharge_max_kW = (
+                        float(storage_params["max_discharging_power_ratio"]) * storage_capacity_kWh
+                    )
+ 
+            # efficiencies (0..1)
+            if "charging_efficiency" in storage_params and storage_params["charging_efficiency"] is not None:
+                charge_efficiency = float(storage_params["charging_efficiency"])
+            if "discharging_efficiency" in storage_params and storage_params["discharging_efficiency"] is not None:
+                discharge_efficiency = float(storage_params["discharging_efficiency"])
+ 
+            prefs = self._extract_usage_pref()
+            spref = (prefs.get("storage_preferences", []) or [])
+            if spref:
+                sp = spref[0]  # assume first storage entry
+                storage_id = sp.get("storage_id", storage_id)
+                if "initial_soc_ratio" in sp and sp["initial_soc_ratio"] is not None:
+                    initial_soc_ratio = float(sp["initial_soc_ratio"])
+                if "final_soc_ratio" in sp and sp["final_soc_ratio"] is not None:
+                    final_soc_ratio = float(sp["final_soc_ratio"])
+ 
+ 
+        # d_given_t and p_pen
+        d_given_t = self._extract_given_load_profile(load_id, T, d_max_per_h)
+        p_pen = self._extract_penalty_profile(load_id)
+ 
+        # Daily minimum energy
+        d_min_total = self._extract_min_daily_energy(load_id)
+ 
+        # Validation
+        if np.any(p_buy_t < 0) or np.any(p_sell_t < 0) or np.any(tau_import_t < 0) or np.any(tau_export_t < 0):
+            raise ValueError("Negative prices/tariffs are not supported.")
+        if d_min_total < 0:
+            raise ValueError("Minimum daily energy must be >= 0.")
+ 
+        notes = {
+            "pv_id": pv_id,
+            "load_id": load_id,
+            "assumptions": {
+                "symmetric_tariff": False,
+                "sell_price_equals_buy_price": True,
+                "hour_resolution_h": 1.0,
+                "penalty_excess_enabled": True,
+            },
+        }
+ 
+        # Build and return ModelData1c, including explicit storage fields
+        return ModelData1c(
+            s_t=s_t,
+            p_buy_t=p_buy_t,
+            p_sell_t=p_sell_t,
+            tau_import_t=tau_import_t,
+            tau_export_t=tau_export_t,
+            penalty_excess_import=penalty_import,
+            penalty_excess_export=penalty_export,
+            d_min_total=float(d_min_total),
+            d_max_t=d_max_t,
+            d_min_ratio=load_constraints["min_power_ratio"],
+            x_max_t=x_max_t,
+            y_max_t=y_max_t,
+            ramp_up_max_ratio=load_constraints["ramp_up_ratio"],
+            ramp_down_max_ratio=load_constraints["ramp_down_ratio"],
+            min_on_time_h=load_constraints["min_on_time_h"],
+            min_off_time_h=load_constraints["min_off_time_h"],
+            hours=hours,
+            # preserve raw dicts for backward compatibility
+            storage_params=storage_params,
+            heat_pump_params=heat_pump_params,
+            notes=notes,
+            # 1c-specific
+            p_pen=p_pen,
+            d_given_t=d_given_t,
+            # explicit storage fields (may be None)
+            storage_id=storage_id,
+            initial_soc_ratio=initial_soc_ratio,
+            final_soc_ratio=final_soc_ratio,
+            storage_capacity_kWh=storage_capacity_kWh,
+            power_charge_max_kW=power_charge_max_kW,
+            power_discharge_max_kW=power_discharge_max_kW,
+            charging_efficiency=charge_efficiency,
+            discharging_efficiency=discharge_efficiency,
+        )
+
+
+class DataProcessor1cOLD(DataProcessor):
     """
     Extension of DataProcessor for 1c, extracting d_given_t and p_pen for ModelData1c as well as battery params.
     """

@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns   
+import warnings
 
 def plot_column_vs_hours(data, column, y_label, figsize=(10, 4), hour_start=0, ax=None, title=None, show=True):
     """
@@ -50,6 +51,105 @@ def plot_column_vs_hours(data, column, y_label, figsize=(10, 4), hour_start=0, a
     if show:
         plt.show()
 
+
+
+def plot_columns_vs_hours(data,
+                          columns,
+                          labels=None,
+                          y_label=None,
+                          figsize=(10, 4),
+                          hour_start=0,
+                          ax=None,
+                          title=None,
+                          show=True,
+                          max_series=5):
+    """
+    Plot multiple specified columns from a dictionary-like or DataFrame against hours (row index).
+    - data: dict of lists or pandas.DataFrame
+    - columns: list/tuple of column names to plot (len <= max_series)
+    - labels: None, dict mapping column -> legend label, or list of labels (same order as columns)
+    - y_label: label for the y-axis (defaults to None)
+    - hour_start: 0 or 1 to choose x-axis start (default 0 -> 0..n-1)
+    - ax: matplotlib Axes to plot on (optional)
+    - title: plot title (optional)
+    - show: whether to call plt.show()
+    - returns: matplotlib.figure.Figure
+    """
+    if isinstance(data, pd.DataFrame):
+        df = data.copy()
+    else:
+        df = pd.DataFrame(data)
+
+    if not isinstance(columns, (list, tuple)):
+        raise TypeError("`columns` must be a list or tuple of column names.")
+
+    if len(columns) == 0:
+        raise ValueError("`columns` must contain at least one column name.")
+
+    if len(columns) > max_series:
+        raise ValueError(f"Too many series to plot (got {len(columns)}). Max allowed is {max_series}.")
+
+    missing = [c for c in columns if c not in df.columns]
+    if missing:
+        raise KeyError(f"Columns not found in data: {missing}. Available: {list(df.columns)}")
+
+    n = len(df)
+    if n == 0:
+        raise ValueError("Input data is empty.")
+
+    # build hours axis
+    if hour_start == 1:
+        hours = list(range(1, n + 1))
+    else:
+        hours = list(range(0, n))
+
+    # prepare labels
+    if labels is None:
+        legend_labels = list(columns)
+    elif isinstance(labels, dict):
+        legend_labels = [labels.get(c, c) for c in columns]
+    elif isinstance(labels, (list, tuple)):
+        if len(labels) != len(columns):
+            raise ValueError("If `labels` is a list/tuple it must have the same length as `columns`.")
+        legend_labels = list(labels)
+    else:
+        raise TypeError("`labels` must be None, a dict, or a list/tuple.")
+
+    # plotting setup
+    markers = ['o', 'D', '^', 's', 'v']  # up to 5
+    linestyles = ['-', '--', '-.', ':', '-']
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.get_figure()
+
+    plotted_any = False
+    for i, col in enumerate(columns):
+        y = pd.to_numeric(df[col], errors="coerce")
+        if y.isna().all():
+            warnings.warn(f"Column '{col}' contains no numeric values and will be skipped.")
+            continue
+
+        m = markers[i % len(markers)]
+        ls = linestyles[i % len(linestyles)]
+        ax.plot(hours, y, marker=m, linestyle=ls, label=legend_labels[i])
+        plotted_any = True
+
+    if not plotted_any:
+        raise ValueError("No numeric series were plotted; all requested columns contain non-numeric values.")
+
+    ax.set_xlabel("Hour [h]")
+    if y_label:
+        ax.set_ylabel(y_label)
+    ax.set_title(title or ", ".join(legend_labels))
+    ax.set_xlim(min(hours), max(hours))
+    ax.legend()
+    ax.grid(True)
+
+    if show:
+        plt.show()
+
+    return fig
 
 
 def plot_sensitivity_vs_hours(solutions_dict, column, y_label, figsize=(10, 4), hour_start=0,
