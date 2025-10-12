@@ -110,6 +110,7 @@ class OptModel:
         
         return self.solution
 
+
 class OptModelb1:
     
     def __init__(self, model_data):
@@ -138,7 +139,8 @@ class OptModelb1:
                         "min_total_load")
         
         # Power balance: load met by used PV + net grid import
-        self.m.addConstr(self.d == self.s_pv + self.x - self.y, name="power_balance")
+        self.m.addConstr(self.d -self.s_pv - self.x + self.y <= 0, name="power_balance_le")
+        self.m.addConstr(self.d -self.s_pv - self.x + self.y >= 0, name="power_balance_ue")
 
     
         # Excess import/export constraints
@@ -228,6 +230,56 @@ class OptModelb1:
             }
         
         return self.solution
+    
+    def save_LP_duals(self):
+        """
+        Extract and save primal and dual values from the solved optimization model.
+        Returns:
+            tuple: (optimal_objective, optimal_variables, optimal_duals)
+        """
+        if self.m.status == GRB.OPTIMAL:
+            
+            
+            # Save dual values (shadow prices of constraints)
+            optimal_duals = {c.ConstrName: c.Pi for c in self.m.getConstrs()}
+            
+            
+            
+            self.optimal_duals = optimal_duals
+            
+        else:
+            print("Optimization was not successful. Cannot extract LP results.")
+            
+            optimal_duals = None
+            
+
+        return  optimal_duals
+    
+    def print_LP_results(self):
+        """
+        Nicely print the LP results: objective, decision variable values, and duals.
+        """
+        if self.m.status == GRB.OPTIMAL:
+            print("\n-------------------   RESULTS  -------------------")
+            print(f"Optimal objective value: {self.m.objVal:.4f}\n")
+            
+            if hasattr(self, "solution") and self.solution is not None and "penalty_cost" in self.solution:
+                print(f"Total Penalty: {round(self.solution['penalty_cost'], 2)}\n")
+            else:
+                print("Total Penalty: (not available)\n")
+            
+            print("Decision variables (primal values):")
+            for v in self.m.getVars():
+                print(f"  {v.VarName:20s} = {v.X:10.4f}")
+            
+            print("\nDual variables (shadow prices):")
+            for c in self.m.getConstrs():
+                print(f"  {c.ConstrName:20s} = {c.Pi:10.4f}")
+            
+            print("--------------------------------------------------\n")
+        
+        else:
+            print("Optimization was not successful. No results to print.")
 
 class OptModelc1:
     

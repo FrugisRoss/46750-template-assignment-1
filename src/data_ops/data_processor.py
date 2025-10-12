@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import json
 from typing import Dict, Any, List, Optional, Tuple
-
+from pathlib import Path
 import numpy as np
 import pandas as pd
-from pathlib import Path
+import json
 
 @dataclass
 class ModelData:
@@ -77,7 +77,6 @@ class ModelData1c(ModelData):
     
     p_pen: float
     d_given_t: np.ndarray
-
 
 class DataProcessor:
     """
@@ -309,6 +308,7 @@ class DataProcessor:
             notes=notes,
         )
 
+
 class DataProcessor1b(DataProcessor):
     """
     Extension of DataProcessor for 1b, extracting d_given_t and p_pen for ModelData1b.
@@ -340,7 +340,7 @@ class DataProcessor1b(DataProcessor):
             raise ValueError(f"hourly_profile_ratio length {len(d_given_ratio)} != T={T} for load_id={load_id}.")
 
         # Convert to absolute hourly values (kWh) by scaling with d_max_per_h
-        d_given_t = np.asarray([float(v) for v in d_given_ratio], dtype=float) #* float(d_max_per_h)
+        d_given_t = np.asarray([float(v) for v in d_given_ratio], dtype=float) * float(d_max_per_h)
         return d_given_t
 
 
@@ -436,11 +436,47 @@ class DataProcessor1b(DataProcessor):
             p_pen=p_pen,
             d_given_t=d_given_t,
         )
-    
+
+
+
+def update_penalty_load_shifting(file_path: str, new_penalty: float, load_id: str = "FFL_01") -> None:
+    """
+    Updates the 'penalty_load_shifting' value in a usage_preferences.json file
+    for the given load_id.
+
+    Args:
+        file_path (str): Path to the usage_preferences.json file.
+        new_penalty (float): New penalty value to assign.
+        load_id (str, optional): Target load_id to update. Defaults to "FFL_01".
+    """
+    file_path = Path(file_path)
+
+    # --- Load existing JSON ---
+    with file_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # --- Update penalty value ---
+    updated = False
+    for entry in data:
+        load_prefs = entry.get("load_preferences", [])
+        for lp in load_prefs:
+            if lp.get("load_id") == load_id:
+                lp["penalty_load_shifting"] = float(new_penalty)
+                updated = True
+                break
+
+    if not updated:
+        raise ValueError(f"load_id '{load_id}' not found in {file_path}")
+
+    # --- Save back to file (with nice formatting) ---
+    with file_path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+
+
 
 class DataProcessor1c(DataProcessor):
     """
-    Extension of DataProcessor for 1c, extracting d_given_t and p_pen for ModelData1c.
+    Extension of DataProcessor for 1c, extracting d_given_t and p_pen for ModelData1c as well as battery params.
     """
 
 
@@ -469,7 +505,7 @@ class DataProcessor1c(DataProcessor):
             raise ValueError(f"hourly_profile_ratio length {len(d_given_ratio)} != T={T} for load_id={load_id}.")
 
         # Convert to absolute hourly values (kWh) by scaling with d_max_per_h
-        d_given_t = np.asarray([float(v) for v in d_given_ratio], dtype=float) #* float(d_max_per_h)
+        d_given_t = np.asarray([float(v) for v in d_given_ratio], dtype=float) * float(d_max_per_h)
         return d_given_t
 
 
@@ -565,40 +601,3 @@ class DataProcessor1c(DataProcessor):
             p_pen=p_pen,
             d_given_t=d_given_t,
         )
-    
-
-
-
-
-def update_penalty_load_shifting(file_path: str, new_penalty: float, load_id: str = "FFL_01") -> None:
-    """
-    Updates the 'penalty_load_shifting' value in a usage_preferences.json file
-    for the given load_id.
-
-    Args:
-        file_path (str): Path to the usage_preferences.json file.
-        new_penalty (float): New penalty value to assign.
-        load_id (str, optional): Target load_id to update. Defaults to "FFL_01".
-    """
-    file_path = Path(file_path)
-
-    # --- Load existing JSON ---
-    with file_path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    # --- Update penalty value ---
-    updated = False
-    for entry in data:
-        load_prefs = entry.get("load_preferences", [])
-        for lp in load_prefs:
-            if lp.get("load_id") == load_id:
-                lp["penalty_load_shifting"] = float(new_penalty)
-                updated = True
-                break
-
-    if not updated:
-        raise ValueError(f"load_id '{load_id}' not found in {file_path}")
-
-    # --- Save back to file (with nice formatting) ---
-    with file_path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
