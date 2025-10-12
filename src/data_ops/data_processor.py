@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import json
+from copy import copy 
 
 @dataclass
 class ModelData:
@@ -338,40 +339,50 @@ class ScenarioModifier:
     def __init__(self, base_model_data):
         self.base = base_model_data
 
+    def _preserve_custom_attrs(self, new_model_data):
+        # Copy any dynamic or custom attributes from base to new instance
+        for attr in ['capital_cost_per_kWh', 'N_replications']:
+            if hasattr(self.base, attr):
+                setattr(new_model_data, attr, getattr(self.base, attr))
+        return new_model_data
+
     def multiply_price(self, price_multiplier: float = 1.0):
-        """Return ModelData with all price entries multiplied by a factor."""
         if price_multiplier is None:
             raise ValueError("price_multiplier must be provided.")
 
         p_buy_scaled = self.base.p_buy_t * price_multiplier
         p_sell_scaled = self.base.p_sell_t * price_multiplier
 
-        return replace(
+        new_data = replace(
             self.base,
             p_buy_t=p_buy_scaled,
             p_sell_t=p_sell_scaled,
-            notes={**self.base.notes, 
-                'scenario': 'scaled_price',
-                'multiplier': price_multiplier}
+            notes={**self.base.notes,
+                   'scenario': 'scaled_price',
+                   'multiplier': price_multiplier}
         )
+        return self._preserve_custom_attrs(new_data)
 
     def new_export_tariff(self, new_tariff: float = 1.5):
-        """Model with a higher export tariff (less profitable export)."""
         tau_export_new = np.full_like(self.base.tau_export_t, new_tariff)
-        return replace(
+        new_data = replace(
             self.base,
             tau_export_t=tau_export_new,
-            notes={**self.base.notes, 'scenario': 'high_export_tariff', 'new_tariff': float(new_tariff)}
+            notes={**self.base.notes,
+                   'scenario': 'high_export_tariff',
+                   'new_tariff': float(new_tariff)}
         )
-
+        return self._preserve_custom_attrs(new_data)
 
     def new_min_consumption(self, new_min: float = 4.0):
-        """Reduce daily consumption requirement."""
-        return replace(
+        new_data = replace(
             self.base,
             d_min_total=float(new_min),
-            notes={**self.base.notes, 'scenario': 'low_min_consumption', 'new_min': new_min}
+            notes={**self.base.notes,
+                   'scenario': 'low_min_consumption',
+                   'new_min': new_min}
         )
+        return self._preserve_custom_attrs(new_data)
 class DataProcessor1b(DataProcessor):
     """
     Extension of DataProcessor for 1b, extracting d_given_t and p_pen for ModelData1b.

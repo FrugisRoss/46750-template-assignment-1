@@ -8,14 +8,17 @@ import numpy as np
 from data_ops.data_visualizer import plot_column_vs_hours, plot_sensitivity_vs_hours
 import os
 import matplotlib.pyplot as plt
+from pathlib import Path
 # %%
+
+grandparent_dir = Path(__file__).resolve().parents[1]
 ############## Question 1b ##############
 
 #Set the penalty for load shifting
 load_shifting_penalty = 0.6
-update_penalty_load_shifting(f'../46750-template-assignment-1/data/question_1b/usage_preferences.json', load_shifting_penalty)
+update_penalty_load_shifting(grandparent_dir / "data" / "question_1b"/"usage_preferences.json", load_shifting_penalty)
 # 1. Load and process data
-loader = DataLoader(input_path='../46750-template-assignment-1/data/question_1b')
+loader = DataLoader(input_path=grandparent_dir / "data" / "question_1b")
 raw = loader.get_data()
 #print(raw)
 processor = DataProcessor1b(raw)
@@ -38,7 +41,7 @@ optm.print_LP_results()
 
 # %%
 
-out_dir = '../46750-template-assignment-1/Assignments'
+out_dir = grandparent_dir / "results" / "question_1b"
 os.makedirs(out_dir, exist_ok=True)
 
 
@@ -55,7 +58,7 @@ fig2.savefig(os.path.join(out_dir, 'absolute_load_shift_vs_hour_base.pdf'), form
 
 
 # %%
-out_dir = '../46750-template-assignment-1/Assignments'
+
 
 ############## Sensitivity Analysis ##############
 
