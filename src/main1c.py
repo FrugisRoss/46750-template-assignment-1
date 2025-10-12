@@ -5,16 +5,23 @@ from data_ops.data_processor import update_penalty_load_shifting
 from opt_model.opt_model import OptModelc1
 import numpy as np
 from data_ops.data_visualizer import plot_column_vs_hours
+from pathlib import Path
 
 # %%
 ############## Question 1b ##############
+# Get the base directory "grandparent"  of the current file
+grandparent_dir = Path(__file__).resolve().parents[1]
+
+# %%
+############## Question 1a: Single simulation ##############
+# 1. Load and process data
 
 #Set the penalty for load shifting
 load_shifting_penalty = 3.0  # Penalty cost per kWh of load shifting
 # Update the usage_preferences.json file with the new penalty
-update_penalty_load_shifting(f'../46750-template-assignment-1/data/question_1c/usage_preferences.json', load_shifting_penalty)
+update_penalty_load_shifting(grandparent_dir / "data" / "question_1c"/"usage_preferences.json", load_shifting_penalty)
 # 1. Load and process data
-loader = DataLoader(input_path='../46750-template-assignment-1/data/question_1c')
+loader = DataLoader(input_path=grandparent_dir / "data" / "question_1c")
 raw = loader.get_data()
 #print(raw)
 processor = DataProcessor1c(raw)

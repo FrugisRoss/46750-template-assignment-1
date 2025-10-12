@@ -287,7 +287,7 @@ class OptModelc1:
         self.T = len(model_data.hours)
         self.data = model_data
         self.m = gp.Model("flexible_consumer_enhanced")
-
+    
         # --- Variables ---
         
         # Core variables
@@ -301,7 +301,7 @@ class OptModelc1:
         self.x_excess = self.m.addMVar(self.T, lb=0, name="x_excess")  # Import above limit
         self.y_excess = self.m.addMVar(self.T, lb=0, name="y_excess")  # Export above limit
 
-        # Excess varables for battery operation
+        # Excess variables for battery operation
         self.b_d = self.m.addMVar(self.T, lb=0, name="b_dis") # Discharging power
         self.b_c = self.m.addMVar(self.T, lb=0, name="b_cha") # Charging power
         self.b_soc = self.m.addMVar(self.T, lb=0, ub=model_data.storage_capacity_kWh, name="b_soc") # State of charge
@@ -418,6 +418,9 @@ class OptModelc1:
                     for t in range(self.T)
                 ),
                 "z": [self.z[t].X for t in range(self.T)],
+                "b_d": [self.b_d[t].X for t in range(self.T)],
+                "b_c": [self.b_c[t].X for t in range(self.T)],
+                "b_soc": [self.b_soc[t].X for t in range(self.T)],
             }
         
         return self.solution
