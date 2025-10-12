@@ -46,8 +46,10 @@ if solution:
     print("Grid exports:", np.array(solution['y']).round(2).tolist())
     print("Total Penalty:", round(solution['penalty_cost'], 2))
     print("z:", np.array(solution['z']).round(2).tolist())
+    print("SOE:", np.array(solution['b_soc']).round(2).tolist())
 else:
     print("No feasible solution found.")
+
 
 # %%
 # plot_column_vs_hours(solution, column='d', y_label="Served Load [kWh]", figsize=(10, 4), hour_start=0, ax=None, title="Served Load vs Hour", show=False)
