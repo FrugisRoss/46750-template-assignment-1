@@ -4,9 +4,11 @@ from data_ops.data_processor import DataProcessor1c
 from data_ops.data_processor import update_penalty_load_shifting
 from opt_model.opt_model import OptModelc1
 import numpy as np
-from data_ops.data_visualizer import plot_column_vs_hours, plot_columns_vs_hours
+from data_ops.data_visualizer import plot_column_vs_hours, plot_columns_vs_hours, plot_sensitivity_vs_hours
 from pathlib import Path
 from matplotlib import pyplot as plt
+from data_ops import DataLoader, DataProcessor
+import os
 
 # %%
 ############## Question 1b ##############
@@ -36,6 +38,12 @@ print(model_data.p_pen)
 # 2. Build and solve optimization model
 optm = OptModelc1(model_data)
 solution = optm.solve()
+
+# Save LP results
+duals = optm.save_LP_duals()
+
+# Print LP results
+optm.print_LP_results()
 
 
 # %%
@@ -82,6 +90,8 @@ fig2 = plot_columns_vs_hours(solution,
                             hour_start=0,
                             figsize=(10, 4),
                             show=False)
+
+
 
 # %%
 plt.show()
