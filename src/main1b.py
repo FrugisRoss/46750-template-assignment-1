@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 ############## Question 1b ##############
 
 #Set the penalty for load shifting
-load_shifting_penalty = 0.6
+load_shifting_penalty = 1.8
 update_penalty_load_shifting(f'../46750-template-assignment-1/data/question_1b/usage_preferences.json', load_shifting_penalty)
 # 1. Load and process data
 loader = DataLoader(input_path='../46750-template-assignment-1/data/question_1b')

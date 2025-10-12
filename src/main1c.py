@@ -136,7 +136,7 @@ def run_penalty_sensitivity(penalty_values, json_path, data_path, model_class):
 
     return all_solutions
 # Define penalty values to test
-penalty_values = [ 0.2, 1.0, 1.8,2.6, 3.4 ]
+penalty_values = [ 1.8]
 
 # Paths
 json_path = grandparent_dir / "data" / "question_1c"/"usage_preferences.json"
