@@ -110,7 +110,6 @@ class OptModel:
         
         return self.solution
 
-
 class OptModelb1:
     
     def __init__(self, model_data):
@@ -297,10 +296,15 @@ class OptModelc1:
         self.y = self.m.addMVar(self.T, lb=0, name="y")  # No upper bound, penalties handle excess
         self.s_pv = self.m.addMVar(self.T, lb=0, ub=model_data.s_t, name="s_pv")
         self.z = self.m.addMVar(self.T, lb=0, name="z")
-        
+
         # Excess variables for penalty calculation
         self.x_excess = self.m.addMVar(self.T, lb=0, name="x_excess")  # Import above limit
         self.y_excess = self.m.addMVar(self.T, lb=0, name="y_excess")  # Export above limit
+
+        # Excess varables for battery operation
+        self.b_d = self.m.addMVar(self.T, lb=0, name="b_dis") # Discharging power
+        self.b_c = self.m.addMVar(self.T, lb=0, name="b_cha") # Charging power
+        self.b_soc = self.m.addMVar(self.T, lb=0, ub=model_data.storage_capacity_kWh, name="b_soc") # State of charge
 
         # --- Constraints ---
 
@@ -309,12 +313,30 @@ class OptModelc1:
                         "min_total_load")
         
         # Power balance: load met by used PV + net grid import
-        self.m.addConstr(self.d == self.s_pv + self.x - self.y, name="power_balance")
-
+        self.m.addConstr(self.d == self.s_pv + self.x - self.y + self.b_c - self.b_d, name="power_balance")
     
         # Excess import/export constraints
         self.m.addConstr(self.x_excess >= self.x - model_data.x_max_t, name="excess_import")
         self.m.addConstr(self.y_excess >= self.y - model_data.y_max_t, name="excess_export")
+
+        # Battery operation constraints
+        for t in range(self.T):
+            # State of charge update
+            if t == 1:
+                self.m.addConstr(self.b_soc[t] == model_data.initial_soc_ratio*model_data.storage_capacity_kWh
+                                  + model_data.charging_efficiency * self.b_c[t]
+                                  - (1/model_data.discharging_efficiency) * self.b_d[t], name=f"soc_update_{t}")
+            elif t > 1:
+                self.m.addConstr(self.b_soc[t] == self.b_soc[t-1] 
+                                 + model_data.charging_efficiency * self.b_c[t] 
+                                 - (1/model_data.discharging_efficiency) * self.b_d[t], name=f"soc_update_{t}")
+            # End of day SOC constraint
+            if t == self.T-1:
+                self.m.addConstr(self.b_soc[t] == model_data.final_soc_ratio*model_data.storage_capacity_kWh, name="end_day_soc")
+            
+            # Charging and discharging limits
+            self.m.addConstr(self.b_c[t] <= model_data.max_charging_power_ratio*model_data.storage_capacity_kWh, name=f"max_charge_{t}")
+            self.m.addConstr(self.b_d[t] <= model_data.max_discharging_power_ratio*model_data.storage_capacity_kWh, name=f"max_discharge_{t}")
 
         # Load ramping constraints (if ramp rates < 1.0)
         if model_data.ramp_up_max_ratio < 1.0 or model_data.ramp_down_max_ratio < 1.0:

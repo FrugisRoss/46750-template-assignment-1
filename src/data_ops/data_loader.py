@@ -34,7 +34,7 @@ class DataLoader:
     Loads energy system input data for a given configuration/question from structured CSV and json files
     and an auxiliary configuration metadata file.
 
-    >>> data = DataLoader(input_path='data/question_1a')
+    >>> data = DataLoader(input_path='data/question_1c')
     
     """
     question: str

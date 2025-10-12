@@ -19,8 +19,8 @@ raw = loader.get_data()
 #print(raw)
 processor = DataProcessor1c(raw)
 model_data = processor.build_model_data()
-#print(model_data)
-print(model_data.d_given_t)
+print(model_data)
+#print(model_data.d_given_t)
 print(model_data.p_pen)
 
 

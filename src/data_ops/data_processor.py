@@ -77,6 +77,7 @@ class ModelData1c(ModelData):
     
     p_pen: float
     d_given_t: np.ndarray
+    
 
 class DataProcessor:
     """
@@ -438,7 +439,6 @@ class DataProcessor1b(DataProcessor):
         )
 
 
-
 def update_penalty_load_shifting(file_path: str, new_penalty: float, load_id: str = "FFL_01") -> None:
     """
     Updates the 'penalty_load_shifting' value in a usage_preferences.json file
@@ -533,7 +533,6 @@ class DataProcessor1c(DataProcessor):
         # time and prices
         p_buy_t, p_sell_t, tau_import_t, tau_export_t, hours = self._extract_prices_and_tariffs()
         T = len(hours)
-
 
         # PV availability s_t
         pv_nameplate_kW, pv_id = self._extract_pv_specs()
