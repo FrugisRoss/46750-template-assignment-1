@@ -24,12 +24,8 @@ import json
 import csv
 import pandas as pd
 from pathlib import Path
-
-from pathlib import Path
 from dataclasses import dataclass
 from logging import Logger
-import pandas as pd
-from dataclasses import dataclass
 import os
 from typing import Dict, Any
 
@@ -38,7 +34,7 @@ class DataLoader:
     Loads energy system input data for a given configuration/question from structured CSV and json files
     and an auxiliary configuration metadata file.
 
-    >>> data = DataLoader(input_path='data/question_1a')
+    >>> data = DataLoader(input_path='data/question_1c')
     
     """
     question: str
