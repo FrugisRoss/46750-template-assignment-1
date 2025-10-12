@@ -385,15 +385,18 @@ class OptModelc1:
         # Charging cannot exceed remaining SOC capacity
         for t in range(self.T):
             self.m.addConstr(self.b_c[t] <= model_data.storage_capacity_kWh - self.b_soc[t], name=f"charge_limit_{t}")
- 
+
+        
         # SOC evolution for all hours from 1 to T-1
         for t in range(1, self.T):
             self.m.addConstr(self.b_soc[t] == self.b_soc[t-1] +
-                            model_data.charging_efficiency * self.b_c[t] -
-                            (1/model_data.discharging_efficiency) * self.b_d[t], name=f"soc_update_{t}")
+                            model_data.charging_efficiency * self.b_c[t-1] -
+                            (1/model_data.discharging_efficiency) * self.b_d[t-1], name=f"soc_update_{t}")
  
+        
         # End of day SOC constraint
         self.m.addConstr(self.b_soc[self.T-1] == model_data.final_soc_ratio * model_data.storage_capacity_kWh, name="end_day_soc")
+        
 
 
         # Load ramping constraints (if ramp rates < 1.0)
@@ -479,6 +482,12 @@ class OptModelc1:
                 "b_d": [self.b_d[t].X for t in range(self.T)],
                 "b_c": [self.b_c[t].X for t in range(self.T)],
                 "b_soc": [self.b_soc[t].X for t in range(self.T)],
+                "Charging Operation": [self.b_c[t].X - self.b_d[t].X for t in range(self.T)],
+                "Price Import": self.data.p_buy_t,
+                "Price Export": self.data.p_sell_t,
+                "Import Tariff": self.data.tau_import_t,
+                "Export Tariff": self.data.tau_export_t,
+                "Export_Import": [self.y[t].X - self.x[t].X for t in range(self.T)],
             }
         
         return self.solution
@@ -520,13 +529,13 @@ class OptModelc1:
             else:
                 print("Total Penalty: (not available)\n")
             
-            print("Decision variables (primal values):")
-            for v in self.m.getVars():
-                print(f"  {v.VarName:20s} = {v.X:10.4f}")
+            # print("Decision variables (primal values):")
+            # for v in self.m.getVars():
+            #     print(f"  {v.VarName:20s} = {v.X:10.4f}")
             
-            print("\nDual variables (shadow prices):")
-            for c in self.m.getConstrs():
-                print(f"  {c.ConstrName:20s} = {c.Pi:10.4f}")
+            # print("\nDual variables (shadow prices):")
+            # for c in self.m.getConstrs():
+            #     print(f"  {c.ConstrName:20s} = {c.Pi:10.4f}")
             
             print("--------------------------------------------------\n")
         

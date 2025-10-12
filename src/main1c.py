@@ -20,7 +20,7 @@ grandparent_dir = Path(__file__).resolve().parents[1]
 # 1. Load and process data
 
 #Set the penalty for load shifting
-load_shifting_penalty = 3.0  # Penalty cost per kWh of load shifting
+load_shifting_penalty = 1.8  # Penalty cost per kWh of load shifting
 # Update the usage_preferences.json file with the new penalty
 update_penalty_load_shifting(grandparent_dir / "data" / "question_1c"/"usage_preferences.json", load_shifting_penalty)
 # 1. Load and process data
@@ -64,36 +64,120 @@ else:
 # plot_column_vs_hours(solution, column='b_c', y_label="Battery Charge [kWh]", figsize=(10, 4), hour_start=0, ax=None, title="Charging vs Hour", show=False)
 # plot_column_vs_hours(solution, column='b_soc', y_label="Battery SOE [kWh]", figsize=(10, 4), hour_start=0, ax=None, title="SOE vs Hour", show=False)
 
-columns = ['d', 'z', 'b_d', 'b_c', 'b_soc']
-labels = { 'd': 'Served Load', 'z': 'Load Shift', 'b_d': 'Battery Discharging Power', 'b_c': 'Battery Charging Power', 'b_soc': 'Battery SOE' }
+out_dir = grandparent_dir / "Assignments"
+os.makedirs(out_dir, exist_ok=True)
+
+columns = ['d', 'Export_Import', 'Charging Operation', 'b_soc', 'Price Import']
+labels = { 'd': 'Served Load', 'Export_Import': 'Export/Import(with sign)', 'Charging Operation': 'Battery Operation(with sign)', 'b_soc': 'Battery SOE', 'Price Import': 'Electricity Price'}
  
 fig = plot_columns_vs_hours(solution,
                             columns=columns,
                             labels=labels,
                             y_label="Electricity [kWh]",
-                            title="Do your thing: " + str("Battery Operation"),
+                            title=str("Battery Operation and price"),
                             hour_start=0,
                             figsize=(10, 4),
                             show=False)
 
-columns = ['d', 's_pv', 'x', 'y']
-labels = {'s_pv': 'PV production [kWh]',
-          'd': 'Electricity consumed [kWh]',
-          'x': 'Electricity imported [kWh]',
-          'y': 'Electricity exported [kWh]'}
- 
-fig2 = plot_columns_vs_hours(solution,
-                            columns=columns,
-                            labels=labels,
-                            y_label="Electricity [kWh]",
-                            title="Do your thing: " + str("Electricity Balance"),
-                            hour_start=0,
-                            figsize=(10, 4),
-                            show=False)
+fig.savefig(os.path.join(out_dir, 'battery_operation.pdf'), format='pdf', bbox_inches='tight')
+
+fig1, ax = plt.subplots(figsize=(10, 4))
+plot_column_vs_hours(solution, column='d', y_label="Served Load [kWh]", figsize=(10, 4), hour_start=0, ax=ax, title="Served Load vs Hour", show=False)
+fig1.savefig(os.path.join(out_dir, 'battery_served_load_vs_hour_base.pdf'), format='pdf', bbox_inches='tight')
+#plt.show(fig)
+
+# Absolute load shift plot -> save as vector (SVG and PDF)
+fig2, ax2 = plt.subplots(figsize=(10, 4))
+plot_column_vs_hours(solution, column='z', y_label="Absolute Load Shift [kWh]", figsize=(10, 4), hour_start=0, ax=ax2, title="Absolute Load Shift vs Hour", show=False)
+fig2.savefig(os.path.join(out_dir, 'battery_absolute_load_shift_vs_hour_base.pdf'), format='pdf', bbox_inches='tight')
+#plt.show(fig2)
 
 
+# %%
 
+
+def run_penalty_sensitivity(penalty_values, json_path, data_path, model_class):
+    """
+    Runs the optimization for each value in penalty_values.
+    
+    Args:
+        penalty_values (list): List of penalty values to test.
+        json_path (str): Path to usage_preferences.json file.
+        data_path (str): Path to the folder with data.
+        model_class (class): Optimization model class (e.g., OptModelb1).
+
+    Returns:
+        dict: {penalty_value: solution_dict}
+    """
+    all_solutions = {}
+
+    for penalty in penalty_values:
+        print(f"\n--------- Running model for load_shifting_penalty = {penalty} --------")
+
+        # Update penalty in JSON
+        update_penalty_load_shifting(json_path, penalty)
+
+        # Load and preprocess data
+        loader = DataLoader(input_path=data_path)
+        raw = loader.get_data()
+        processor = DataProcessor1c(raw)
+        model_data = processor.build_model_data()
+
+        # Build and solve model
+        optm = model_class(model_data)
+        solution = optm.solve()
+        # Save LP results
+        duals = optm.save_LP_duals()
+
+        # Print LP results
+        optm.print_LP_results()
+        all_solutions[penalty] = solution
+        
+
+    return all_solutions
+# Define penalty values to test
+penalty_values = [ 0.2, 1.0, 1.8,2.6, 3.4 ]
+
+# Paths
+json_path = grandparent_dir / "data" / "question_1c"/"usage_preferences.json"
+data_path = grandparent_dir / "data" / "question_1c"
+
+# Run sensitivity analysis
+solutions = run_penalty_sensitivity(
+    penalty_values=penalty_values,
+    json_path=json_path,
+    data_path=data_path,
+    model_class=OptModelc1
+)
+
+
+# %%
+
+# Plot served load vs hours and save
+fig3, ax3 = plt.subplots(figsize=(10, 4))
+fig3, ax3 = plot_sensitivity_vs_hours(
+    solutions,
+    column="d",
+    y_label="Served Load [kWh]",
+    title="Served Load vs Hour for Different Penalties",
+    legend_title="Load shifting penalty",
+    ax=ax3,
+    show=False,
+)
+fig3.savefig(os.path.join(out_dir, 'battery_served_load_vs_hour_sensitivity.pdf'), format='pdf', bbox_inches='tight')
+#plt.show(fig3)
+
+fig4, ax4 = plt.subplots(figsize=(10, 4))
+fig4, ax4 = plot_sensitivity_vs_hours(
+    solutions,
+    column="z",
+    y_label="Absolute Load Shift [kWh]",
+    title="Load Shift vs Hour for Different Penalties",
+    legend_title="Load shifting penalty",
+    ax=ax4,
+    show=False,
+)
+fig4.savefig(os.path.join(out_dir, 'battery_absolute_load_shift_vs_hour_sensitivity.pdf'), format='pdf', bbox_inches='tight')
+#plt.show(fig4)
 # %%
 plt.show()
-
-# %%
